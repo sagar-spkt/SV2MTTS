@@ -435,7 +435,7 @@ class InferenceSpeakerEmbedding(TrainSpeakerEmbedding):
 
         inputs_embed = super(InferenceSpeakerEmbedding, self).call(inputs_to_lstm)
 
-        inputs_embed = K.reshape(inputs_embed, (inputs_shape[0], inputs_shape[1], -1))
+        inputs_embed = K.reshape(inputs_embed, (inputs_shape[0], inputs_shape[1], inputs_embed.shape[-1]))
 
         inputs_embed = inputs_embed * mask
 

@@ -6,7 +6,10 @@ from layers import Encoder, Decoder, PostProcessing, Conditioning, InferenceSpea
 
 def get_train_model(vocab_size,
                     char_embed_size,
+                    sliding_window_size,
+                    spk_embed_lstm_units,
                     spk_embed_size,
+                    spk_embed_num_layers,
                     enc_conv1_bank_depth,
                     enc_convprojec_filters1,
                     enc_convprojec_filters2,
@@ -19,12 +22,13 @@ def get_train_model(vocab_size,
                     dec_frsize,
                     target_size,
                     n_mels,
+                    embed_mels,
                     enc_seq_len=None,
                     dec_seq_len=None
                     ):
     char_inputs = Input(shape=(enc_seq_len,), name='char_inputs')
     decoder_inputs = Input(shape=(dec_seq_len, dec_frsize), name='decoder_inputs')
-    spk_inputs = Input(shape=(spk_embed_size,), name='spk_embed_inputs')
+    spk_inputs = Input(shape=(None, sliding_window_size, embed_mels), name='spk_embed_inputs')
 
     char_encoder = Encoder(hidden_size=hidden_size // 2,
                            vocab_size=vocab_size,
@@ -34,6 +38,11 @@ def get_train_model(vocab_size,
                            convprojec_filters2=enc_convprojec_filters2,
                            highway_depth=enc_highway_depth,
                            name='char_encoder')
+    speaker_encoder = InferenceSpeakerEmbedding(lstm_units=spk_embed_lstm_units,
+                                                proj_size=spk_embed_size,
+                                                num_layers=spk_embed_num_layers,
+                                                trainable=False,
+                                                name='embeddings')
     condition = Conditioning()
     decoder = Decoder(hidden_size=hidden_size,
                       dec_output_size=dec_frsize,
@@ -49,7 +58,8 @@ def get_train_model(vocab_size,
                                      name='postprocessing')
 
     char_enc = char_encoder(char_inputs)
-    conditioned_char_enc = condition([char_enc, spk_inputs])
+    spk_embed = speaker_encoder(spk_inputs)
+    conditioned_char_enc = condition([char_enc, spk_embed])
     decoder_pred, *latest_states = decoder([conditioned_char_enc, decoder_inputs], initial_state=None)
     postnet_out = post_processing(decoder_pred)
 
