@@ -1,7 +1,7 @@
-from tensorflow.python.keras.models import Model
+from tensorflow.python.keras.models import Model, load_model
 from tensorflow.python.keras.layers import Input
 
-from layers import Encoder, Decoder, PostProcessing, Conditioning, InferenceSpeakerEmbedding
+from layers import Encoder, Decoder, PostProcessing, Conditioning, InferenceSpeakerEmbedding, custom_layers
 
 
 def get_train_model(vocab_size,
@@ -60,24 +60,14 @@ def get_train_model(vocab_size,
     char_enc = char_encoder(char_inputs)
     spk_embed = speaker_encoder(spk_inputs)
     conditioned_char_enc = condition([char_enc, spk_embed])
-    decoder_pred, *latest_states = decoder([conditioned_char_enc, decoder_inputs], initial_state=None)
+    decoder_pred, alignments = decoder([conditioned_char_enc, decoder_inputs], initial_state=None)
     postnet_out = post_processing(decoder_pred)
 
     train_model = Model(inputs=[char_inputs, spk_inputs, decoder_inputs],
-                        outputs=[decoder_pred, postnet_out])
+                        outputs=[decoder_pred, postnet_out, alignments])
+    train_model.compile(optimizer='adam', loss=['mae', 'mae', None], loss_weights=[1., 1., None])
     return train_model
 
 
-def get_speaker_embedding_inference_model(pretrained_model,
-                                          n_mels,
-                                          lstm_units,
-                                          proj_size,
-                                          num_layers,
-                                          sliding_window_size):
-    inputs = Input(shape=(None, sliding_window_size, n_mels))
-    emb = InferenceSpeakerEmbedding(lstm_units, proj_size, num_layers, name='embeddings')(inputs)
-    model = Model(inputs, emb)
-
-    model.load_weights(pretrained_model, by_name=True)
-
-    return model
+def load_saved_model(model_path):
+    return load_model(model_path, custom_objects=custom_layers)

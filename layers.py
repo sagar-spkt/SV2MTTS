@@ -41,8 +41,11 @@ class Decoder(Layer):
         self.output_projection = Dense(dec_output_size)
         super(Decoder, self).__init__(**kwargs)
 
-    def call(self, inputs, initial_state=None, **kwargs):
+    def call(self, inputs, initial_state=None, training=None, **kwargs):
         memory, dec_inputs = inputs
+
+        if training is None:
+            training = K.learning_phase()
 
         if initial_state is None:
             attention_init_state = K.sum(K.zeros_like(memory), axis=1)
@@ -57,12 +60,16 @@ class Decoder(Layer):
                                        [1, self.dec_output_size])
             initial_state = [output_init_state, attention_init_state,
                              alignment_init_state, attn_rnn_init_state,
-                             dec_rnn1_init_state, dec_rnn2_init_state]
+                             dec_rnn1_init_state, dec_rnn2_init_state, 0]
+        alignment_history = tf.TensorArray(tf.float32, size=K.shape(dec_inputs)[1])
+        initial_state.append(alignment_history)
 
         def step(query, states):
             (prev_output, prev_attention,
              prev_alignment, prev_attn_rnn_state,
-             prev_dec_rnn1_state, prev_dec_rnn2_state) = states
+             prev_dec_rnn1_state, prev_dec_rnn2_state, i, align_hist) = states
+
+            query = K.switch(training, query, prev_output)
 
             query = self.prenet(query)
             cell_inputs = K.concatenate([query, prev_attention], axis=-1)
@@ -76,15 +83,19 @@ class Decoder(Layer):
             res_conn2 = res_conn1 + dec_rnn2_out
             next_output = self.output_projection(res_conn2)
 
+            align_hist = align_hist.write(i, next_alignment)
+
             return next_output, [
                 next_output, next_attention,
                 next_alignment, next_attn_rnn_state,
-                next_dec_rnn1_state, next_dec_rnn2_state
+                next_dec_rnn1_state, next_dec_rnn2_state, i + 1, align_hist
             ]
 
         last_output, all_outputs, latest_states = K.rnn(step, dec_inputs, initial_state)
 
-        return all_outputs, latest_states
+        alignment_history = tf.transpose(latest_states[-1].stack(), perm=[1, 0, 2])
+
+        return all_outputs, alignment_history
 
     def get_config(self):
         config = super(Decoder, self).get_config()
@@ -444,3 +455,20 @@ class InferenceSpeakerEmbedding(TrainSpeakerEmbedding):
         inputs_embed = K.sum(inputs_embed, axis=1) / n
 
         return inputs_embed
+
+
+custom_layers = {
+    BahdanauAttentionMechanism.__name__: BahdanauAttentionMechanism,
+    Decoder.__name__: Decoder,
+    Conditioning.__name__: Conditioning,
+    Prenet.__name__: Prenet,
+    Conv1DBankStep.__name__: Conv1DBankStep,
+    Conv1DBank.__name__: Conv1DBank,
+    HighwayNetStep.__name__: HighwayNetStep,
+    HighwayNet.__name__: HighwayNet,
+    CBHG.__name__: CBHG,
+    Encoder.__name__: Encoder,
+    PostProcessing.__name__: PostProcessing,
+    TrainSpeakerEmbedding.__name__: TrainSpeakerEmbedding,
+    InferenceSpeakerEmbedding.__name__: InferenceSpeakerEmbedding
+}
