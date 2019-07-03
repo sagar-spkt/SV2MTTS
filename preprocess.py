@@ -9,7 +9,7 @@ from data_loader import SpeakerEmbeddingPredictionGenerator
 from models import get_speaker_embedding_model
 
 
-def wav_to_numpy(dataset_rootdir, preprocess_rootdir, sample_rate, min_len):
+def wav_to_numpy(dataset_rootdir, preprocess_rootdir, sample_rate, min_len, max_len):
     dataset_rootdir = os.path.abspath(dataset_rootdir)
     preprocess_rootdir = os.path.abspath(preprocess_rootdir)
 
@@ -24,15 +24,13 @@ def wav_to_numpy(dataset_rootdir, preprocess_rootdir, sample_rate, min_len):
     all_utterances = glob.glob(os.path.join(dataset_rootdir, '*/*/*.wav'))
     len_satisfied_utterances = []
     total_time = 0
-    max_len = 0
 
     for utterance in tqdm(all_utterances):
         y, _ = librosa.load(utterance, sr=sample_rate)
         y, _ = librosa.effects.trim(y)
-        if len(y) < int(min_len * sample_rate):
+        if len(y) < int(min_len * sample_rate) or len(y) > int(max_len * sample_rate):
             continue
         total_time += len(y) / sample_rate
-        max_len = np.max((max_len, len(y)))
         len_satisfied_utterances.append(utterance.split('/')[-1].replace('.wav', ''))  # only the name in dataframe
         savepath = os.path.join(preprocess_rootdir, '/'.join(utterance.split('/')[-3:]).replace('wav', 'npy'))
         os.makedirs(os.path.dirname(savepath), exist_ok=True)
@@ -41,7 +39,7 @@ def wav_to_numpy(dataset_rootdir, preprocess_rootdir, sample_rate, min_len):
     transcripts = transcripts[transcripts[0].isin(len_satisfied_utterances)]
     transcripts.to_csv(os.path.join(preprocess_rootdir, 'trans.tsv'), sep='\t', header=False, index=False)
     with open(os.path.join(preprocess_rootdir, 'logs.txt'), 'w') as f:
-        f.write(str(total_time) + '\t' + str(max_len))
+        f.write(str(total_time))
     print('Done')
 
 
