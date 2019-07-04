@@ -7,9 +7,14 @@ from tqdm import tqdm
 
 from data_loader import SpeakerEmbeddingPredictionGenerator
 from models import get_speaker_embedding_model
+import hparams
 
 
-def wav_to_numpy(dataset_rootdir, preprocess_rootdir, sample_rate, min_len, max_len):
+def wav_to_numpy(dataset_rootdir,
+                 preprocess_rootdir,
+                 sample_rate=hparams.SAMPLE_RATE,
+                 min_len=hparams.MIN_UTT_LEN,
+                 max_len=hparams.MAX_UTT_LEN):
     dataset_rootdir = os.path.abspath(dataset_rootdir)
     preprocess_rootdir = os.path.abspath(preprocess_rootdir)
 
@@ -44,19 +49,19 @@ def wav_to_numpy(dataset_rootdir, preprocess_rootdir, sample_rate, min_len, max_
 
 
 def wav_to_speaker_embeddings(numpied_dir,
-                              model_path,
-                              batch_size,
-                              sample_rate,
-                              n_fft,
-                              hop_length,
-                              win_length,
-                              n_mels,
-                              ref_db,
-                              max_db,
-                              sliding_window_size,
-                              spk_embed_lstm_units,
-                              spk_embed_size,
-                              spk_embed_num_layers,
+                              spk_embed_model_path,
+                              batch_size=hparams.BATCH_SIZE,
+                              sample_rate=hparams.SAMPLE_RATE,
+                              n_fft=hparams.N_FFT,
+                              hop_length=hparams.HOP_LENGTH,
+                              win_length=hparams.WIN_LENGTH,
+                              n_mels=hparams.SPK_EMBED_N_MELS,
+                              ref_db=hparams.REF_DB,
+                              max_db=hparams.MAX_DB,
+                              sliding_window_size=hparams.SLIDING_WINDOW_SIZE,
+                              spk_embed_lstm_units=hparams.SPK_EMBED_LSTM_UNITS,
+                              spk_embed_size=hparams.SPK_EMBED_SIZE,
+                              spk_embed_num_layers=hparams.SPK_EMBED_NUM_LAYERS,
                               verbose=1):
     speaker_embedding_model = get_speaker_embedding_model(sliding_window_size=sliding_window_size,
                                                           embed_mels=n_mels,
@@ -73,7 +78,7 @@ def wav_to_speaker_embeddings(numpied_dir,
                                                             n_mels=n_mels,
                                                             ref_db=ref_db,
                                                             max_db=max_db)
-    speaker_embedding_model.load_weights(model_path, by_name=True)
+    speaker_embedding_model.load_weights(spk_embed_model_path, by_name=True)
     speaker_embeddings = speaker_embedding_model.predict_generator(speaker_generator, verbose=verbose)
 
     iterator = tqdm(zip(speaker_generator.get_all_utterances(), speaker_embeddings)) if verbose else zip(

@@ -6,10 +6,11 @@ from tensorflow.python.keras.utils import Sequence
 from tensorflow.python.keras.preprocessing.sequence import pad_sequences
 
 from utterance_utils import mel_for_speaker_embeddings, text_to_nparray, get_spectrograms
+import hparams
 
 
 class RandomTrainGenerator(Sequence):
-    def __init__(self, batch_size):
+    def __init__(self, batch_size=hparams.BATCH_SIZE):
         self.batch_size = batch_size
 
     def __len__(self):
@@ -25,15 +26,15 @@ class RandomTrainGenerator(Sequence):
 
 class SpeakerEmbeddingPredictionGenerator(Sequence):
     def __init__(self, numpied_dir,
-                 batch_size,
-                 sliding_window_size,
-                 sample_rate,
-                 n_fft,
-                 hop_length,
-                 win_length,
-                 n_mels,
-                 ref_db,
-                 max_db
+                 batch_size=hparams.BATCH_SIZE,
+                 sliding_window_size=hparams.SLIDING_WINDOW_SIZE,
+                 sample_rate=hparams.SAMPLE_RATE,
+                 n_fft=hparams.N_FFT,
+                 hop_length=hparams.HOP_LENGTH,
+                 win_length=hparams.WIN_LENGTH,
+                 n_mels=hparams.SPK_EMBED_N_MELS,
+                 ref_db=hparams.REF_DB,
+                 max_db=hparams.MAX_DB
                  ):
         self.batch_size = batch_size
         self.sliding_window_size = sliding_window_size
@@ -78,19 +79,19 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
 class SynthesizerTrainGenerator(Sequence):
     def __init__(self,
                  numpied_dir,
-                 batch_size,
-                 num_buckets,
-                 output_per_step,
-                 vocab,
-                 sample_rate,
-                 preemphasize,
-                 hop_length,
-                 win_length,
-                 n_fft,
-                 window,
-                 n_mels,
-                 ref_db,
-                 max_db,
+                 batch_size=hparams.BATCH_SIZE,
+                 num_buckets=hparams.NUM_BUCKETS,
+                 output_per_step=hparams.OUTPUT_PER_STEP,
+                 vocab=hparams.VOCAB,
+                 sample_rate=hparams.SAMPLE_RATE,
+                 preemphasize=hparams.PREEMPHASIZE,
+                 hop_length=hparams.HOP_LENGTH,
+                 win_length=hparams.WIN_LENGTH,
+                 n_fft=hparams.N_FFT,
+                 window=hparams.WINDOW,
+                 n_mels=hparams.SYNTHESIZER_N_MELS,
+                 ref_db=hparams.REF_DB,
+                 max_db=hparams.MAX_DB,
                  shuffle=True):
         self.batch_size = batch_size
         self.shuffle = shuffle

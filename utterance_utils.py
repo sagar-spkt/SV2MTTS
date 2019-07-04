@@ -77,10 +77,10 @@ def mag_spectro2wav(mag_spectro,
                     ref_db,
                     max_db,
                     n_iter_griffin_lim,
-                    n_fft=None,
-                    hop_length=None,
-                    win_length=None,
-                    window=None):
+                    n_fft,
+                    hop_length,
+                    win_length,
+                    window):
     mag_spectro = mag_spectro.T
     mag_spectro = (np.clip(mag_spectro, 0, 1) * max_db) - max_db + ref_db
     mag_spectro = np.power(10.0, mag_spectro / 20)

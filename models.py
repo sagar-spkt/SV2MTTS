@@ -2,27 +2,28 @@ from tensorflow.python.keras.models import Model, load_model
 from tensorflow.python.keras.layers import Input
 
 from layers import Encoder, Decoder, PostProcessing, Conditioning, InferenceSpeakerEmbedding, custom_layers
+import hparams
 
 
-def get_full_model(vocab_size,
-                   char_embed_size,
-                   sliding_window_size,
-                   spk_embed_lstm_units,
-                   spk_embed_size,
-                   spk_embed_num_layers,
-                   enc_conv1_bank_depth,
-                   enc_convprojec_filters1,
-                   enc_convprojec_filters2,
-                   enc_highway_depth,
-                   hidden_size,
-                   post_conv1_bank_depth,
-                   post_convprojec_filters1,
-                   post_convprojec_filters2,
-                   post_highway_depth,
-                   dec_frsize,
-                   target_size,
-                   n_mels,
-                   embed_mels,
+def get_full_model(vocab_size=len(hparams.VOCAB),
+                   char_embed_size=hparams.CHAR_EMBED_SIZE,
+                   sliding_window_size=hparams.SLIDING_WINDOW_SIZE,
+                   spk_embed_lstm_units=hparams.SPK_EMBED_LSTM_UNITS,
+                   spk_embed_size=hparams.SPK_EMBED_SIZE,
+                   spk_embed_num_layers=hparams.SPK_EMBED_NUM_LAYERS,
+                   enc_conv1_bank_depth=hparams.ENC_CONV1_BANK_DEPTH,
+                   enc_convprojec_filters1=hparams.ENC_CONVPROJEC_FILTERS1,
+                   enc_convprojec_filters2=hparams.ENC_CONVPROJEC_FILTERS2,
+                   enc_highway_depth=hparams.ENC_HIGHWAY_DEPTH,
+                   hidden_size=hparams.HIDDEN_SIZE,
+                   post_conv1_bank_depth=hparams.POST_CONV1_BANK_DEPTH,
+                   post_convprojec_filters1=hparams.POST_CONVPROJEC_FILTERS1,
+                   post_convprojec_filters2=hparams.POST_CONVPROJEC_FILTERS2,
+                   post_highway_depth=hparams.POST_HIGHWAY_DEPTH,
+                   dec_frsize=hparams.DEC_FRAME_SIZE,
+                   target_size=hparams.TARGET_MAG_FRAME_SIZE,
+                   n_mels=hparams.SYNTHESIZER_N_MELS,
+                   embed_mels=hparams.SPK_EMBED_N_MELS,
                    enc_seq_len=None,
                    dec_seq_len=None
                    ):
@@ -68,11 +69,11 @@ def get_full_model(vocab_size,
     return full_model
 
 
-def get_speaker_embedding_model(sliding_window_size,
-                                embed_mels,
-                                spk_embed_lstm_units,
-                                spk_embed_size,
-                                spk_embed_num_layers):
+def get_speaker_embedding_model(sliding_window_size=hparams.SLIDING_WINDOW_SIZE,
+                                embed_mels=hparams.SPK_EMBED_N_MELS,
+                                spk_embed_lstm_units=hparams.SPK_EMBED_LSTM_UNITS,
+                                spk_embed_size=hparams.SPK_EMBED_SIZE,
+                                spk_embed_num_layers=hparams.SPK_EMBED_NUM_LAYERS):
     spk_inputs = Input(shape=(None, sliding_window_size, embed_mels), name='spk_embed_inputs')
     speaker_encoder = InferenceSpeakerEmbedding(lstm_units=spk_embed_lstm_units,
                                                 proj_size=spk_embed_size,
@@ -85,21 +86,21 @@ def get_speaker_embedding_model(sliding_window_size,
     return speaker_embedding_model
 
 
-def get_synthesizer_model(vocab_size,
-                          char_embed_size,
-                          spk_embed_size,
-                          enc_conv1_bank_depth,
-                          enc_convprojec_filters1,
-                          enc_convprojec_filters2,
-                          enc_highway_depth,
-                          hidden_size,
-                          post_conv1_bank_depth,
-                          post_convprojec_filters1,
-                          post_convprojec_filters2,
-                          post_highway_depth,
-                          dec_frsize,
-                          target_size,
-                          n_mels,
+def get_synthesizer_model(vocab_size=len(hparams.VOCAB),
+                          char_embed_size=hparams.CHAR_EMBED_SIZE,
+                          spk_embed_size=hparams.SPK_EMBED_SIZE,
+                          enc_conv1_bank_depth=hparams.ENC_CONV1_BANK_DEPTH,
+                          enc_convprojec_filters1=hparams.ENC_CONVPROJEC_FILTERS1,
+                          enc_convprojec_filters2=hparams.ENC_CONVPROJEC_FILTERS2,
+                          enc_highway_depth=hparams.ENC_HIGHWAY_DEPTH,
+                          hidden_size=hparams.HIDDEN_SIZE,
+                          post_conv1_bank_depth=hparams.POST_CONV1_BANK_DEPTH,
+                          post_convprojec_filters1=hparams.POST_CONVPROJEC_FILTERS1,
+                          post_convprojec_filters2=hparams.POST_CONVPROJEC_FILTERS2,
+                          post_highway_depth=hparams.POST_HIGHWAY_DEPTH,
+                          dec_frsize=hparams.DEC_FRAME_SIZE,
+                          target_size=hparams.TARGET_MAG_FRAME_SIZE,
+                          n_mels=hparams.SYNTHESIZER_N_MELS,
                           enc_seq_len=None,
                           dec_seq_len=None):
     char_inputs = Input(shape=(enc_seq_len,), name='char_inputs')
