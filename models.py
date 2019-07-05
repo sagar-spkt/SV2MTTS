@@ -1,5 +1,6 @@
 from tensorflow.python.keras.models import Model, load_model
 from tensorflow.python.keras.layers import Input
+from tensorflow.python.keras.optimizers import Adam
 
 from layers import Encoder, Decoder, PostProcessing, Conditioning, InferenceSpeakerEmbedding, custom_layers
 import hparams
@@ -101,6 +102,8 @@ def get_synthesizer_model(vocab_size=len(hparams.VOCAB),
                           dec_frsize=hparams.DEC_FRAME_SIZE,
                           target_size=hparams.TARGET_MAG_FRAME_SIZE,
                           n_mels=hparams.SYNTHESIZER_N_MELS,
+                          learning_rate=hparams.LEARNING_RATE,
+                          clipnorm=hparams.CLIPNORM,
                           enc_seq_len=None,
                           dec_seq_len=None):
     char_inputs = Input(shape=(enc_seq_len,), name='char_inputs')
@@ -136,7 +139,8 @@ def get_synthesizer_model(vocab_size=len(hparams.VOCAB),
 
     synthesizer_model = Model(inputs=[char_inputs, spk_embed_inputs, decoder_inputs],
                               outputs=[decoder_pred, postnet_out, alignments])
-    synthesizer_model.compile(optimizer='adam', loss=['mae', 'mae', None], loss_weights=[1., 1., None])
+    optimizer = Adam(lr=learning_rate, clipnorm=clipnorm)
+    synthesizer_model.compile(optimizer=optimizer, loss=['mae', 'mae', None], loss_weights=[1., 1., None])
 
     return synthesizer_model
 
