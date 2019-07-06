@@ -60,14 +60,12 @@ class Decoder(Layer):
                                        [1, self.dec_output_size])
             initial_state = [output_init_state, attention_init_state,
                              alignment_init_state, attn_rnn_init_state,
-                             dec_rnn1_init_state, dec_rnn2_init_state, 0]
-        alignment_history = tf.TensorArray(tf.float32, size=K.shape(dec_inputs)[1])
-        initial_state.append(alignment_history)
+                             dec_rnn1_init_state, dec_rnn2_init_state]
 
         def step(query, states):
             (prev_output, prev_attention,
              prev_alignment, prev_attn_rnn_state,
-             prev_dec_rnn1_state, prev_dec_rnn2_state, i, align_hist) = states
+             prev_dec_rnn1_state, prev_dec_rnn2_state) = states
 
             query = K.switch(training, query, prev_output)
 
@@ -83,19 +81,15 @@ class Decoder(Layer):
             res_conn2 = res_conn1 + dec_rnn2_out
             next_output = self.output_projection(res_conn2)
 
-            align_hist = align_hist.write(i, next_alignment)
-
-            return next_output, [
+            return [next_output, next_alignment], [
                 next_output, next_attention,
                 next_alignment, next_attn_rnn_state,
-                next_dec_rnn1_state, next_dec_rnn2_state, i + 1, align_hist
+                next_dec_rnn1_state, next_dec_rnn2_state
             ]
 
         last_output, all_outputs, latest_states = K.rnn(step, dec_inputs, initial_state)
 
-        alignment_history = tf.transpose(latest_states[-1].stack(), perm=[1, 0, 2])
-
-        return all_outputs, alignment_history
+        return all_outputs[0], all_outputs[1]
 
     def get_config(self):
         config = super(Decoder, self).get_config()
