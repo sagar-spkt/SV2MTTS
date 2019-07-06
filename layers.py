@@ -5,12 +5,12 @@ from tensorflow.python.keras.layers import Layer, Dense, Embedding, Bidirectiona
 
 
 class BahdanauAttentionMechanism(Layer):
-    def __init__(self, **kwargs):
+    def __init__(self, attention_dim, **kwargs):
         super(BahdanauAttentionMechanism, self).__init__(**kwargs)
+        self.attention_dim = attention_dim
 
-    def build(self, input_shape):
-        self.W = Dense(input_shape[1][2], use_bias=False)
-        self.U = Dense(input_shape[1][2], use_bias=False)
+        self.W = Dense(self.attention_dim, use_bias=False)
+        self.U = Dense(self.attention_dim, use_bias=False)
         self.V = Dense(1, use_bias=False)
 
     def call(self, inputs, **kwargs):
@@ -26,15 +26,23 @@ class BahdanauAttentionMechanism(Layer):
 
         return attentions, alignments
 
+    def get_config(self):
+        config = super(BahdanauAttentionMechanism, self).get_config()
+        config.update({
+            'attention_dim': self.attention_dim
+        })
+        return config
+
 
 class Decoder(Layer):
-    def __init__(self, hidden_size, dec_output_size, **kwargs):
+    def __init__(self, hidden_size, attention_dim, dec_output_size, **kwargs):
         self.hidden_size = hidden_size
+        self.attention_dim = attention_dim
         self.dec_output_size = dec_output_size
 
         self.prenet = Prenet()
         self.attn_rnn_cell = GRUCell(self.hidden_size)
-        self.attention_mechanism = BahdanauAttentionMechanism()
+        self.attention_mechanism = BahdanauAttentionMechanism(self.attention_dim)
         self.projection = Dense(self.hidden_size)
         self.decoderRNNCell1 = GRUCell(self.hidden_size)
         self.decoderRNNCell2 = GRUCell(self.hidden_size)
@@ -95,6 +103,7 @@ class Decoder(Layer):
         config = super(Decoder, self).get_config()
         config.update({
             'hidden_size': self.hidden_size,
+            'attention_dim': self.attention_dim,
             'dec_output_size': self.dec_output_size
         })
         return config

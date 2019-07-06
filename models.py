@@ -21,6 +21,7 @@ def get_full_model(vocab_size=len(hparams.VOCAB),
                    post_convprojec_filters1=hparams.POST_CONVPROJEC_FILTERS1,
                    post_convprojec_filters2=hparams.POST_CONVPROJEC_FILTERS2,
                    post_highway_depth=hparams.POST_HIGHWAY_DEPTH,
+                   attention_dim=hparams.ATTENTION_DIM,
                    dec_frsize=hparams.DEC_FRAME_SIZE,
                    target_size=hparams.TARGET_MAG_FRAME_SIZE,
                    n_mels=hparams.SYNTHESIZER_N_MELS,
@@ -47,6 +48,7 @@ def get_full_model(vocab_size=len(hparams.VOCAB),
                                                 name='embeddings')
     condition = Conditioning()
     decoder = Decoder(hidden_size=hidden_size,
+                      attention_dim=attention_dim,
                       dec_output_size=dec_frsize,
                       name='decoder')
     post_processing = PostProcessing(hidden_size=hidden_size // 2,
@@ -100,6 +102,7 @@ def get_synthesizer_model(vocab_size=len(hparams.VOCAB),
                           post_convprojec_filters2=hparams.POST_CONVPROJEC_FILTERS2,
                           post_highway_depth=hparams.POST_HIGHWAY_DEPTH,
                           dec_frsize=hparams.DEC_FRAME_SIZE,
+                          attention_dim=hparams.ATTENTION_DIM,
                           target_size=hparams.TARGET_MAG_FRAME_SIZE,
                           n_mels=hparams.SYNTHESIZER_N_MELS,
                           learning_rate=hparams.LEARNING_RATE,
@@ -120,6 +123,7 @@ def get_synthesizer_model(vocab_size=len(hparams.VOCAB),
                            name='char_encoder')
     condition = Conditioning()
     decoder = Decoder(hidden_size=hidden_size,
+                      attention_dim=attention_dim,
                       dec_output_size=dec_frsize,
                       name='decoder')
     post_processing = PostProcessing(hidden_size=hidden_size // 2,
