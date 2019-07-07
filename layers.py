@@ -4,30 +4,30 @@ from tensorflow.python.keras.layers import Layer, Dense, Embedding, Bidirectiona
     Conv1D, BatchNormalization, Activation, Lambda, Multiply, Reshape, GRUCell, LSTM, TimeDistributed
 
 
-class BahdanauAttentionMechanism(Layer):
+class BahdanauAttention(Layer):
     def __init__(self, attention_dim, **kwargs):
-        super(BahdanauAttentionMechanism, self).__init__(**kwargs)
+        super(BahdanauAttention, self).__init__(**kwargs)
         self.attention_dim = attention_dim
 
-        self.W = Dense(self.attention_dim, use_bias=False)
-        self.U = Dense(self.attention_dim, use_bias=False)
-        self.V = Dense(1, use_bias=False)
+        self.memory_layer = Dense(self.attention_dim, use_bias=False)
+        self.query_layer = Dense(self.attention_dim, use_bias=False)
+        self.attention_variable = Dense(1)
 
     def call(self, inputs, **kwargs):
-        query, values = inputs
+        query, values, keys = inputs
 
         hidden_with_time_axis = K.expand_dims(query, 1)
-        score = self.V(K.tanh(
-            self.W(values) + self.U(hidden_with_time_axis)))
-        alignments = K.softmax(score, axis=1)
-        attentions = alignments * values
-        alignments = K.squeeze(alignments, axis=2)
-        attentions = K.sum(attentions, axis=1)
+        score = self.attention_variable(K.tanh(
+            keys + self.query_layer(hidden_with_time_axis)))  # TODO Mask option for score with infinity
+        alignment = K.softmax(score, axis=1)
+        attention = alignment * values
+        alignment = K.squeeze(alignment, axis=2)
+        attention = K.sum(attention, axis=1)
 
-        return attentions, alignments
+        return attention, alignment
 
     def get_config(self):
-        config = super(BahdanauAttentionMechanism, self).get_config()
+        config = super(BahdanauAttention, self).get_config()
         config.update({
             'attention_dim': self.attention_dim
         })
@@ -35,57 +35,64 @@ class BahdanauAttentionMechanism(Layer):
 
 
 class Decoder(Layer):
-    def __init__(self, hidden_size, attention_dim, dec_output_size, **kwargs):
+    def __init__(self, hidden_size, attention_dim, n_mels, output_per_step, **kwargs):
         self.hidden_size = hidden_size
         self.attention_dim = attention_dim
-        self.dec_output_size = dec_output_size
+        self.n_mels = n_mels
+        self.output_per_step = output_per_step
 
         self.prenet = Prenet()
         self.attn_rnn_cell = GRUCell(self.hidden_size)
-        self.attention_mechanism = BahdanauAttentionMechanism(self.attention_dim)
+        self.attention_mechanism = BahdanauAttention(self.attention_dim)
         self.projection = Dense(self.hidden_size)
         self.decoderRNNCell1 = GRUCell(self.hidden_size)
         self.decoderRNNCell2 = GRUCell(self.hidden_size)
-        self.output_projection = Dense(dec_output_size)
+        self.output_projection = Dense(self.n_mels * self.output_per_step)
         super(Decoder, self).__init__(**kwargs)
 
     def call(self, inputs, initial_state=None, training=None, **kwargs):
         memory, dec_inputs = inputs
 
+        dec_original_shape = K.shape(dec_inputs)
+
+        dec_inputs_reshaped = K.reshape(dec_inputs, [dec_original_shape[0], -1, self.n_mels * self.output_per_step])
+        go_frame = K.zeros_like(dec_inputs_reshaped[:, 1, :])
+        dec_inputs_with_goframe = K.concatenate([K.expand_dims(go_frame, axis=1), dec_inputs_reshaped[:, :-1, :]],
+                                                axis=1)
+
+        values = memory  # TODO mask option for memory
+        keys = self.attention_mechanism.memory_layer(memory)
+
         if training is None:
             training = K.learning_phase()
 
         if initial_state is None:
-            attention_init_state = K.sum(K.zeros_like(memory), axis=1)
-            alignment_init_state = K.sum(K.zeros_like(memory), axis=2)
-            attn_rnn_init_state = K.tile(K.expand_dims(K.sum(K.zeros_like(memory), axis=[1, 2])),
-                                         [1, self.hidden_size])
-            dec_rnn1_init_state = K.tile(K.expand_dims(K.sum(K.zeros_like(memory), axis=[1, 2])),
-                                         [1, self.hidden_size])
-            dec_rnn2_init_state = K.tile(K.expand_dims(K.sum(K.zeros_like(memory), axis=[1, 2])),
-                                         [1, self.hidden_size])
-            output_init_state = K.tile(K.expand_dims(K.sum(K.zeros_like(memory), axis=[1, 2])),
-                                       [1, self.dec_output_size])
-            initial_state = [output_init_state, attention_init_state,
-                             alignment_init_state, attn_rnn_init_state,
-                             dec_rnn1_init_state, dec_rnn2_init_state]
+            initial_state = [go_frame,
+                             K.sum(K.zeros_like(memory), axis=1),
+                             K.sum(K.zeros_like(memory), axis=2),
+                             self.attn_rnn_cell.get_initial_state(batch_size=dec_original_shape[0],
+                                                                  dtype=dec_inputs.dtype),
+                             self.decoderRNNCell1.get_initial_state(batch_size=dec_original_shape[0],
+                                                                    dtype=dec_inputs.dtype),
+                             self.decoderRNNCell2.get_initial_state(batch_size=dec_original_shape[0],
+                                                                    dtype=dec_inputs.dtype)]
 
-        def step(query, states):
+        def step(dec_input, states):
             (prev_output, prev_attention,
              prev_alignment, prev_attn_rnn_state,
              prev_dec_rnn1_state, prev_dec_rnn2_state) = states
 
-            query = K.switch(training, query, prev_output)
+            dec_input = K.switch(training, dec_input, prev_output)
 
-            query = self.prenet(query)
-            cell_inputs = K.concatenate([query, prev_attention], axis=-1)
-            cell_out, [next_attn_rnn_state] = self.attn_rnn_cell(cell_inputs, [prev_attn_rnn_state])
-            next_attention, next_alignment = self.attention_mechanism([cell_out, memory])
+            prenet_out = self.prenet(dec_input)
+            cell_inputs = K.concatenate([prenet_out, prev_attention], axis=-1)
+            cell_out, next_attn_rnn_state = self.attn_rnn_cell(cell_inputs, [prev_attn_rnn_state])
+            next_attention, next_alignment = self.attention_mechanism([cell_out, values, keys])
             concatenated = K.concatenate([next_attention, cell_out], axis=-1)
             projected = self.projection(concatenated)
-            dec_rnn1_out, [next_dec_rnn1_state] = self.decoderRNNCell1(projected, [prev_dec_rnn1_state])
+            dec_rnn1_out, next_dec_rnn1_state = self.decoderRNNCell1(projected, [prev_dec_rnn1_state])
             res_conn1 = projected + dec_rnn1_out
-            dec_rnn2_out, [next_dec_rnn2_state] = self.decoderRNNCell2(res_conn1, [prev_dec_rnn2_state])
+            dec_rnn2_out, next_dec_rnn2_state = self.decoderRNNCell2(res_conn1, [prev_dec_rnn2_state])
             res_conn2 = res_conn1 + dec_rnn2_out
             next_output = self.output_projection(res_conn2)
 
@@ -95,16 +102,19 @@ class Decoder(Layer):
                 next_dec_rnn1_state, next_dec_rnn2_state
             ]
 
-        last_output, all_outputs, latest_states = K.rnn(step, dec_inputs, initial_state)
+        _, all_outputs, _ = K.rnn(step, dec_inputs_with_goframe, initial_state)
+        dec_outputs = K.reshape(all_outputs[0], (dec_original_shape[0], dec_original_shape[1], self.n_mels))
+        alignments = all_outputs[1]
 
-        return all_outputs[0], all_outputs[1]
+        return dec_outputs, alignments
 
     def get_config(self):
         config = super(Decoder, self).get_config()
         config.update({
             'hidden_size': self.hidden_size,
             'attention_dim': self.attention_dim,
-            'dec_output_size': self.dec_output_size
+            'n_mels': self.n_mels,
+            'output_per_step': self.output_per_step
         })
         return config
 
@@ -358,19 +368,15 @@ class PostProcessing(Layer):
     def __init__(self, hidden_size,
                  conv1d_bank_depth, convprojec_filters1,
                  convprojec_filters2, highway_depth,
-                 dec_frsize, target_frsize,
-                 dec_frreshape, **kwargs):
+                 n_fft, **kwargs):
         super(PostProcessing, self).__init__(**kwargs)
         self.hidden_size = hidden_size
         self.conv1d_bank_depth = conv1d_bank_depth
         self.convprojec_filters1 = convprojec_filters1
         self.convprojec_filters2 = convprojec_filters2
         self.highway_depth = highway_depth
-        self.dec_frsize = dec_frsize
-        self.target_frsize = target_frsize
-        self.dec_frreshape = dec_frreshape
+        self.n_fft = n_fft
 
-        self.reshape = Reshape((-1, self.dec_frreshape), name='decoder_reshape')
         self.decoder_cbhg = CBHG(self.hidden_size,
                                  self.conv1d_bank_depth,
                                  self.convprojec_filters1,
@@ -379,11 +385,10 @@ class PostProcessing(Layer):
                                  return_state=False,
                                  encoder_side=False,
                                  name='decoder_cbhg')
-        self.post_dense = Dense(self.target_frsize, name='postnet_dense')
+        self.post_dense = Dense(self.n_fft, name='postnet_dense')
 
-    def call(self, inputs, training=None, mask=None):
-        reshaped = self.reshape(inputs)
-        cbhg_out = self.decoder_cbhg(reshaped)
+    def call(self, inputs, **kwargs):
+        cbhg_out = self.decoder_cbhg(inputs)
         post_net_out = self.post_dense(cbhg_out)
 
         return post_net_out
@@ -396,9 +401,7 @@ class PostProcessing(Layer):
             'convprojec_filters1': self.convprojec_filters1,
             'convprojec_filters2': self.convprojec_filters2,
             'highway_depth': self.highway_depth,
-            'dec_frsize': self.dec_frsize,
-            'target_frsize': self.target_frsize,
-            'dec_frreshape': self.dec_frreshape
+            'n_fft': self.n_fft,
         })
         return config
 
@@ -461,7 +464,7 @@ class InferenceSpeakerEmbedding(TrainSpeakerEmbedding):
 
 
 custom_layers = {
-    BahdanauAttentionMechanism.__name__: BahdanauAttentionMechanism,
+    BahdanauAttention.__name__: BahdanauAttention,
     Decoder.__name__: Decoder,
     Conditioning.__name__: Conditioning,
     Prenet.__name__: Prenet,

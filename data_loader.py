@@ -171,8 +171,4 @@ class SynthesizerTrainGenerator(Sequence):
         mag_spec = pad_sequences(mag_spec, maxlen=max_frames, dtype='float32', padding='post')
         mel_spec = pad_sequences(mel_spec, maxlen=max_frames, dtype='float32', padding='post')
 
-        mel_spec = np.reshape(mel_spec,
-                              (-1, mel_spec.shape[1] // self.output_per_step, mel_spec.shape[2] * self.output_per_step))
-        decoder_inputs = np.concatenate((np.zeros_like(mel_spec[:, :1, :]), mel_spec[:, :-1, :]), 1)
-
-        return [text_int, embeddings, decoder_inputs], [mel_spec, mag_spec]
+        return [text_int, embeddings, mel_spec], [mel_spec, mag_spec]

@@ -22,15 +22,15 @@ def get_full_model(vocab_size=len(hparams.VOCAB),
                    post_convprojec_filters2=hparams.POST_CONVPROJEC_FILTERS2,
                    post_highway_depth=hparams.POST_HIGHWAY_DEPTH,
                    attention_dim=hparams.ATTENTION_DIM,
-                   dec_frsize=hparams.DEC_FRAME_SIZE,
                    target_size=hparams.TARGET_MAG_FRAME_SIZE,
                    n_mels=hparams.SYNTHESIZER_N_MELS,
+                   output_per_step=hparams.OUTPUT_PER_STEP,
                    embed_mels=hparams.SPK_EMBED_N_MELS,
                    enc_seq_len=None,
                    dec_seq_len=None
                    ):
     char_inputs = Input(shape=(enc_seq_len,), name='char_inputs')
-    decoder_inputs = Input(shape=(dec_seq_len, dec_frsize), name='decoder_inputs')
+    decoder_inputs = Input(shape=(dec_seq_len, n_mels), name='decoder_inputs')
     spk_inputs = Input(shape=(None, sliding_window_size, embed_mels), name='spk_embed_inputs')
 
     char_encoder = Encoder(hidden_size=hidden_size // 2,
@@ -49,16 +49,15 @@ def get_full_model(vocab_size=len(hparams.VOCAB),
     condition = Conditioning()
     decoder = Decoder(hidden_size=hidden_size,
                       attention_dim=attention_dim,
-                      dec_output_size=dec_frsize,
+                      n_mels=n_mels,
+                      output_per_step=output_per_step,
                       name='decoder')
     post_processing = PostProcessing(hidden_size=hidden_size // 2,
                                      conv1d_bank_depth=post_conv1_bank_depth,
                                      convprojec_filters1=post_convprojec_filters1,
                                      convprojec_filters2=post_convprojec_filters2,
                                      highway_depth=post_highway_depth,
-                                     dec_frsize=dec_frsize,
-                                     target_frsize=target_size,
-                                     dec_frreshape=n_mels,
+                                     n_fft=target_size,
                                      name='postprocessing')
 
     char_enc = char_encoder(char_inputs)
@@ -101,16 +100,16 @@ def get_synthesizer_model(vocab_size=len(hparams.VOCAB),
                           post_convprojec_filters1=hparams.POST_CONVPROJEC_FILTERS1,
                           post_convprojec_filters2=hparams.POST_CONVPROJEC_FILTERS2,
                           post_highway_depth=hparams.POST_HIGHWAY_DEPTH,
-                          dec_frsize=hparams.DEC_FRAME_SIZE,
                           attention_dim=hparams.ATTENTION_DIM,
                           target_size=hparams.TARGET_MAG_FRAME_SIZE,
                           n_mels=hparams.SYNTHESIZER_N_MELS,
+                          output_per_step=hparams.OUTPUT_PER_STEP,
                           learning_rate=hparams.LEARNING_RATE,
                           clipnorm=hparams.CLIPNORM,
                           enc_seq_len=None,
                           dec_seq_len=None):
     char_inputs = Input(shape=(enc_seq_len,), name='char_inputs')
-    decoder_inputs = Input(shape=(dec_seq_len, dec_frsize), name='decoder_inputs')
+    decoder_inputs = Input(shape=(dec_seq_len, n_mels), name='decoder_inputs')
     spk_embed_inputs = Input(shape=(spk_embed_size,), name='spk_embed_inputs')
 
     char_encoder = Encoder(hidden_size=hidden_size // 2,
@@ -124,16 +123,15 @@ def get_synthesizer_model(vocab_size=len(hparams.VOCAB),
     condition = Conditioning()
     decoder = Decoder(hidden_size=hidden_size,
                       attention_dim=attention_dim,
-                      dec_output_size=dec_frsize,
+                      n_mels=n_mels,
+                      output_per_step=output_per_step,
                       name='decoder')
     post_processing = PostProcessing(hidden_size=hidden_size // 2,
                                      conv1d_bank_depth=post_conv1_bank_depth,
                                      convprojec_filters1=post_convprojec_filters1,
                                      convprojec_filters2=post_convprojec_filters2,
                                      highway_depth=post_highway_depth,
-                                     dec_frsize=dec_frsize,
-                                     target_frsize=target_size,
-                                     dec_frreshape=n_mels,
+                                     n_fft=target_size,
                                      name='postprocessing')
 
     char_enc = char_encoder(char_inputs)
