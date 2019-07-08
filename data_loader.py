@@ -66,8 +66,9 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
                                        win_length=self.win_length, n_mels=self.n_mels, ref_db=self.ref_db,
                                        max_db=self.max_db) for utt in current_batch]
         mel_slided = [np.stack(
-            [utt[i: i + self.sliding_window_size] for i in range(0, utt.shape[0], int(self.sliding_window_size // 2)) if
-             (i + self.sliding_window_size) <= utt.shape[0]]) for utt in mel_specs]
+            [utt[i: i + self.sliding_window_size] if (i + self.sliding_window_size) <= utt.shape[0] else 
+            utt[-self.sliding_window_size:] for i in range(0, utt.shape[0], int(self.sliding_window_size // 2))]) 
+            for utt in mel_specs]
         # padding
         max_len = np.max([utt.shape[0] for utt in mel_slided])
         padded_mel_slides = np.stack(
