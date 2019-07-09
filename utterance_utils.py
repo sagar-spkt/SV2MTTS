@@ -134,4 +134,4 @@ def mel_for_speaker_embeddings(wav_path,
     mel_db = librosa.amplitude_to_db(mel_spec)
     mel_db = np.clip((mel_db - ref_db + max_db) / max_db, 1e-8, 1)
 
-    return mel_db.astype(np.float32).T
+    return mel_db.astype(np.float32).T, y.shape[0]

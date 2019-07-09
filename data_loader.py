@@ -46,21 +46,32 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
         self.ref_db = ref_db
         self.max_db = max_db
         self.failed_utterances = []
+        self.sample_lengths = []
         self.dataset_dir = dataset_dir
         self.out_dir = out_dir
 
         df = pd.read_csv(os.path.join(dataset_dir, 'tts.tsv'), header=None, sep='\t')
         df['len'] = df[2].str.len()
-        df = df.sort_values('len').reset_index(drop=True)
-        ids = np.array(list(df[0].str.split('_')))
+        self.df = df.sort_values('len').reset_index(drop=True)
+        ids = np.array(list(self.df[0].str.split('_')))
         self.all_utterances = os.path.abspath(dataset_dir) + '/' + pd.Series(ids[:, 0]) + '/' + \
-                              pd.Series(ids[:, 1]) + '/' + df[0] + '.wav'
+                              pd.Series(ids[:, 1]) + '/' + self.df[0] + '.wav'
 
     def __len__(self):
         return len(self.all_utterances) // self.batch_size + 1
 
     def get_all_utterances(self):
         return list(filter(lambda x: x not in self.failed_utterances, self.all_utterances))
+    
+    def on_epoch_end(self):
+        failed_utterances = pd.Series(self.failed_utterances).str.replace(os.path.abspath(self.dataset_dir) + '/', '')
+        failed_utterances = failed_utterances.str.replace('.wav', '')
+        failed_utterances = np.array(list(failed_utterances.str.split('/')))[:, -1]
+
+
+        self.df = self.df[~self.df[0].isin(failed_utterances)]
+        self.df['sample_lengths'] = self.sample_lengths
+        self.df.to_csv(os.path.join(self.out_dir, 'trans.tsv'), header=None, index=None, sep='\t')
 
     def __getitem__(self, index):
         current_batch = self.all_utterances[index * self.batch_size: (index + 1) * self.batch_size]
@@ -69,9 +80,11 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
                                        win_length=self.win_length, n_mels=self.n_mels, ref_db=self.ref_db,
                                        max_db=self.max_db) for utt in current_batch]
         self.failed_utterances.extend([x for x in mel_specs if isinstance(x, str)])
-        mel_specs = [x for x in mel_specs if isinstance(x, np.ndarray)]
+        mel_specs = [(z[0], z[1]) for z in mel_specs if isinstance(z, (tuple, list)) and not isinstance(z, str)]
         if not mel_specs:
             return None
+        mel_specs, sample_lengths = zip(*mel_specs)
+        self.sample_lengths.extend(sample_lengths)
         mel_slided = [np.stack(
             [utt[i: i + self.sliding_window_size] if (i + self.sliding_window_size) <= utt.shape[0] else 
             utt[-self.sliding_window_size:] for i in range(0, utt.shape[0], int(self.sliding_window_size // 2))]) 

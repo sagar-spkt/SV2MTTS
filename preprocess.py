@@ -87,6 +87,8 @@ def wav_to_speaker_embeddings(dataset_dir, out_dir,
         speaker_embeddings.append(batch_embed_prediction)
     speaker_embeddings = np.concatenate(speaker_embeddings, axis=0)
 
+    speaker_generator.on_epoch_end()
+
     iterator = tqdm(zip(speaker_generator.get_all_utterances(), speaker_embeddings)) if verbose else zip(
         speaker_generator.get_all_utterances(), speaker_embeddings)
 
