@@ -1,0 +1,8 @@
+venv
+embedding_model
+__pycache__
+.idea
+.vscode
+.ipynb_checkpoints
+Untitled.ipynb
+debug.py

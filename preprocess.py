@@ -48,7 +48,7 @@ def wav_to_numpy(dataset_rootdir,
     print('Done')
 
 
-def wav_to_speaker_embeddings(numpied_dir,
+def wav_to_speaker_embeddings(dataset_dir, out_dir,
                               spk_embed_model_path,
                               batch_size=hparams.BATCH_SIZE,
                               sample_rate=hparams.SAMPLE_RATE,
@@ -68,7 +68,7 @@ def wav_to_speaker_embeddings(numpied_dir,
                                                           spk_embed_lstm_units=spk_embed_lstm_units,
                                                           spk_embed_size=spk_embed_size,
                                                           spk_embed_num_layers=spk_embed_num_layers)
-    speaker_generator = SpeakerEmbeddingPredictionGenerator(numpied_dir,
+    speaker_generator = SpeakerEmbeddingPredictionGenerator(dataset_dir, out_dir,
                                                             batch_size=batch_size,
                                                             sliding_window_size=sliding_window_size,
                                                             sample_rate=sample_rate,
@@ -79,10 +79,17 @@ def wav_to_speaker_embeddings(numpied_dir,
                                                             ref_db=ref_db,
                                                             max_db=max_db)
     speaker_embedding_model.load_weights(spk_embed_model_path, by_name=True)
-    speaker_embeddings = speaker_embedding_model.predict_generator(speaker_generator, verbose=verbose)
+    speaker_embeddings = []
+    for batch in tqdm(speaker_generator):
+        if batch is None:
+            continue
+        batch_embed_prediction = speaker_embedding_model.predict_on_batch(batch)
+        speaker_embeddings.append(batch_embed_prediction)
+    speaker_embeddings = np.concatenate(speaker_embeddings, axis=0)
 
     iterator = tqdm(zip(speaker_generator.get_all_utterances(), speaker_embeddings)) if verbose else zip(
         speaker_generator.get_all_utterances(), speaker_embeddings)
 
     for utterance, embedding in iterator:
-        np.save(utterance.replace('.npy', '_embed.npy'), embedding)
+        utterance = utterance.replace(dataset_dir, out_dir)
+        np.save(utterance.replace('.wav', '_embed.npy'), embedding)

@@ -1,8 +1,12 @@
 import copy
 import librosa
+import os
 import numpy as np
 from scipy import signal
+import struct
+import webrtcvad
 
+import vad as vd
 import hparams
 
 
@@ -95,7 +99,9 @@ def mag_spectro2wav(mag_spectro,
     return wav.astype(np.float32)
 
 
-def mel_for_speaker_embeddings(numpy_path,
+def mel_for_speaker_embeddings(wav_path,
+                               dataset_dir,
+                               out_dir,
                                sample_rate,
                                n_fft,
                                hop_length,
@@ -103,9 +109,24 @@ def mel_for_speaker_embeddings(numpy_path,
                                n_mels,
                                ref_db,
                                max_db):
-    y = np.load(numpy_path)
-
-    stft = librosa.stft(y, n_fft=n_fft, hop_length=hop_length, win_length=win_length)
+    y, sr = librosa.load(wav_path, sr=sample_rate)
+    vad = webrtcvad.Vad(2)
+    pcm_wave = struct.pack("%dh" % len(y), *(np.round(y * 2**15-1)).astype(np.int16))
+    frames = vd.frame_generator(30, pcm_wave, sample_rate)
+    segments = vd.vad_collector(sample_rate, 30, 100, vad, frames)
+    total_wav = b""
+    for segment in segments:
+        total_wav += segment
+    utt_array = librosa.util.buf_to_float(np.frombuffer(total_wav, dtype=np.int16))
+    if hparams.MIN_UTT_LEN >= (utt_array.shape[0] // sample_rate) or  hparams.MAX_UTT_LEN <= (utt_array.shape[0] // sample_rate):
+        return wav_path
+    npy_path = wav_path.replace(dataset_dir, out_dir)
+    try:
+        os.makedirs('/'.join(npy_path.split('/')[:-1]))
+    except FileExistsError:
+        pass
+    np.save(npy_path.replace('.wav', '.npy'), y)
+    stft = librosa.stft(utt_array, n_fft=n_fft, hop_length=hop_length, win_length=win_length)
     mag_spec = np.abs(stft)
     mel_basis = librosa.filters.mel(sample_rate, n_fft=n_fft, n_mels=n_mels)
     mel_spec = np.dot(mel_basis, mag_spec)
