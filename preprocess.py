@@ -49,6 +49,7 @@ def wav_to_numpy(dataset_rootdir,
 
 
 def wav_to_speaker_embeddings(dataset_dir, out_dir,
+                              dataset_name,
                               spk_embed_model_path,
                               batch_size=hparams.BATCH_SIZE,
                               sample_rate=hparams.SAMPLE_RATE,
@@ -69,6 +70,7 @@ def wav_to_speaker_embeddings(dataset_dir, out_dir,
                                                           spk_embed_size=spk_embed_size,
                                                           spk_embed_num_layers=spk_embed_num_layers)
     speaker_generator = SpeakerEmbeddingPredictionGenerator(dataset_dir, out_dir,
+                                                            dataset_name,
                                                             batch_size=batch_size,
                                                             sliding_window_size=sliding_window_size,
                                                             sample_rate=sample_rate,

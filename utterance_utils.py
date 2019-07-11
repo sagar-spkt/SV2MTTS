@@ -110,15 +110,17 @@ def mel_for_speaker_embeddings(wav_path,
                                ref_db,
                                max_db):
     y, sr = librosa.load(wav_path, sr=sample_rate)
+    y, _ = librosa.effects.trim(y)
     vad = webrtcvad.Vad(2)
-    pcm_wave = struct.pack("%dh" % len(y), *(np.round(y * 2**15-1)).astype(np.int16))
+    pcm_wave = struct.pack("%dh" % len(y), *(np.round(y * 2 ** 15 - 1)).astype(np.int16))
     frames = vd.frame_generator(30, pcm_wave, sample_rate)
     segments = vd.vad_collector(sample_rate, 30, 100, vad, frames)
     total_wav = b""
     for segment in segments:
         total_wav += segment
     utt_array = librosa.util.buf_to_float(np.frombuffer(total_wav, dtype=np.int16))
-    if hparams.MIN_UTT_LEN >= (utt_array.shape[0] // sample_rate) or  hparams.MAX_UTT_LEN <= (utt_array.shape[0] // sample_rate):
+    if hparams.MIN_UTT_LEN >= (utt_array.shape[0] // sample_rate) or hparams.MAX_UTT_LEN <= (
+            utt_array.shape[0] // sample_rate):
         return wav_path
     npy_path = wav_path.replace(dataset_dir, out_dir)
     try:
