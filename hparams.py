@@ -4,7 +4,7 @@ EOS = '$'
 VOCAB = PADDING_CHAR + EOS + ' !"\',-./?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzæéê—'
 
 BATCH_SIZE = 32
-NUM_BUCKETS = 20
+NUM_BUCKETS = 15
 MIN_UTT_LEN = 2  # in sec
 MAX_UTT_LEN = 15  # In sec
 

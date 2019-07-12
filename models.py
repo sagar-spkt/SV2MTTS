@@ -141,7 +141,7 @@ def get_synthesizer_model(vocab_size=len(hparams.VOCAB),
 
     synthesizer_model = Model(inputs=[char_inputs, spk_embed_inputs, decoder_inputs],
                               outputs=[decoder_pred, postnet_out, alignments])
-    optimizer = Adam(lr=learning_rate)
+    optimizer = Adam(lr=learning_rate, clipnorm=clipnorm)
     synthesizer_model.compile(optimizer=optimizer, loss=['mae', 'mae', None], loss_weights=[1., 1., None])
 
     return synthesizer_model
