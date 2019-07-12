@@ -13,7 +13,7 @@ import hparams
 
 def text_to_nparray(text, vocab=hparams.VOCAB):
     char2idx = {char: idx for idx, char in enumerate(vocab)}
-    return np.array([char2idx[char] for char in text], np.int32)
+    return np.array([char2idx[char] for char in text if char in vocab], np.int32)
 
 
 def get_spectrograms(waveform,

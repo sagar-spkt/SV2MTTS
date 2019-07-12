@@ -1,6 +1,7 @@
 PADDING_CHAR = '#'
 EOS = '$'
-VOCAB = PADDING_CHAR + EOS + ' !"\'(),-./:;?ABCDEFGHIJKLMNOPQRSTUVWXYZ[]abcdefghijklmnopqrstuvwxyzæéê—'
+# VOCAB = PADDING_CHAR + EOS + ' !"\'(),-./:;?ABCDEFGHIJKLMNOPQRSTUVWXYZ[]abcdefghijklmnopqrstuvwxyzæéê—'
+VOCAB = PADDING_CHAR + EOS + ' !"\',-./?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzæéê—'
 
 BATCH_SIZE = 32
 NUM_BUCKETS = 20
