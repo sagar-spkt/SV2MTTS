@@ -40,3 +40,8 @@ SPK_EMBED_NUM_LAYERS = 3
 LEARNING_RATE = 0.001
 WARMUP_STEPS = 4000.0
 CLIPNORM = 1.0
+
+vad_window_length = 30  # In milliseconds
+vad_moving_average_width = 8
+vad_max_silence_length = 6
+int16_max = (2 ** 15) - 1

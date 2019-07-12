@@ -3,10 +3,11 @@ import librosa
 import os
 import numpy as np
 from scipy import signal
+from scipy.ndimage.morphology import binary_dilation
 import struct
 import webrtcvad
+from pydub import AudioSegment
 
-import vad as vd
 import hparams
 
 
@@ -99,6 +100,48 @@ def mag_spectro2wav(mag_spectro,
     return wav.astype(np.float32)
 
 
+def trim_long_silences(wav):
+    """
+    Ensures that segments without voice in the waveform remain no longer than a
+    threshold determined by the VAD parameters in params.py.
+    :param wav: the raw waveform as a numpy array of floats
+    :return: the same waveform with silences trimmed away (length <= original wav length)
+    """
+    # Compute the voice detection window size
+    samples_per_window = (hparams.vad_window_length * hparams.SAMPLE_RATE) // 1000
+
+    # Trim the end of the audio to have a multiple of the window size
+    wav = wav[:len(wav) - (len(wav) % samples_per_window)]
+
+    # Convert the float waveform to 16-bit mono PCM
+    pcm_wave = struct.pack("%dh" % len(wav), *(np.round(wav * hparams.int16_max)).astype(np.int16))
+
+    # Perform voice activation detection
+    voice_flags = []
+    vad = webrtcvad.Vad(mode=3)
+    for window_start in range(0, len(wav), samples_per_window):
+        window_end = window_start + samples_per_window
+        voice_flags.append(vad.is_speech(pcm_wave[window_start * 2:window_end * 2],
+                                         sample_rate=hparams.SAMPLE_RATE))
+    voice_flags = np.array(voice_flags)
+
+    # Smooth the voice detection with a moving average
+    def moving_average(array, width):
+        array_padded = np.concatenate((np.zeros((width - 1) // 2), array, np.zeros(width // 2)))
+        ret = np.cumsum(array_padded, dtype=float)
+        ret[width:] = ret[width:] - ret[:-width]
+        return ret[width - 1:] / width
+
+    audio_mask = moving_average(voice_flags, hparams.vad_moving_average_width)
+    audio_mask = np.round(audio_mask).astype(np.bool)
+
+    # Dilate the voiced regions
+    audio_mask = binary_dilation(audio_mask, np.ones(hparams.vad_max_silence_length + 1))
+    audio_mask = np.repeat(audio_mask, samples_per_window)
+
+    return wav[audio_mask == True]
+
+
 def mel_for_speaker_embeddings(wav_path,
                                dataset_dir,
                                out_dir,
@@ -109,16 +152,10 @@ def mel_for_speaker_embeddings(wav_path,
                                n_mels,
                                ref_db,
                                max_db):
-    y, sr = librosa.load(wav_path, sr=sample_rate)
-    y, _ = librosa.effects.trim(y)
-    vad = webrtcvad.Vad(2)
-    pcm_wave = struct.pack("%dh" % len(y), *(np.round(y * 2 ** 15 - 1)).astype(np.int16))
-    frames = vd.frame_generator(30, pcm_wave, sample_rate)
-    segments = vd.vad_collector(sample_rate, 30, 100, vad, frames)
-    total_wav = b""
-    for segment in segments:
-        total_wav += segment
-    utt_array = librosa.util.buf_to_float(np.frombuffer(total_wav, dtype=np.int16))
+    wav = AudioSegment.from_wav(wav_path)
+    wav = wav.set_frame_rate(hparams.SAMPLE_RATE)
+    utt_array = librosa.util.buf_to_float(np.frombuffer(wav.raw_data, dtype=np.int16))
+    utt_array = trim_long_silences(utt_array)
     if hparams.MIN_UTT_LEN >= (utt_array.shape[0] // sample_rate) or hparams.MAX_UTT_LEN <= (
             utt_array.shape[0] // sample_rate):
         return wav_path
@@ -127,7 +164,7 @@ def mel_for_speaker_embeddings(wav_path,
         os.makedirs('/'.join(npy_path.split('/')[:-1]))
     except FileExistsError:
         pass
-    np.save(npy_path.replace('.wav', '.npy'), y)
+    np.save(npy_path.replace('.wav', '.npy'), utt_array)
     stft = librosa.stft(utt_array, n_fft=n_fft, hop_length=hop_length, win_length=win_length)
     mag_spec = np.abs(stft)
     mel_basis = librosa.filters.mel(sample_rate, n_fft=n_fft, n_mels=n_mels)
@@ -136,4 +173,4 @@ def mel_for_speaker_embeddings(wav_path,
     mel_db = librosa.amplitude_to_db(mel_spec)
     mel_db = np.clip((mel_db - ref_db + max_db) / max_db, 1e-8, 1)
 
-    return mel_db.astype(np.float32).T, y.shape[0]
+    return mel_db.astype(np.float32).T, utt_array.shape[0]
