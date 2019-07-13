@@ -4,7 +4,7 @@ EOS = '$'
 VOCAB = PADDING_CHAR + EOS + ' !"\',-./?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzæéê—'
 
 BATCH_SIZE = 32
-NUM_BUCKETS = 15
+NUM_BUCKETS = 20
 MIN_UTT_LEN = 2  # in sec
 MAX_UTT_LEN = 15  # In sec
 
@@ -40,7 +40,7 @@ SPK_EMBED_NUM_LAYERS = 3
 
 LEARNING_RATE = 0.001
 WARMUP_STEPS = 4000.0
-CLIPNORM = 1.0
+CLIPNORM = 5.0
 
 vad_window_length = 30  # In milliseconds
 vad_moving_average_width = 8
