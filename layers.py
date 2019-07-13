@@ -1,5 +1,7 @@
 import tensorflow as tf
+from tensorflow.python import Constant
 from tensorflow.python.keras import backend as K, initializers
+from tensorflow.python.keras.constraints import NonNeg
 from tensorflow.python.keras.layers import Layer, Dense, Embedding, Bidirectional, GRU, Add, Dropout, MaxPooling1D, \
     Conv1D, BatchNormalization, Activation, Lambda, Multiply, Reshape, GRUCell, LSTM, TimeDistributed
 
@@ -463,6 +465,105 @@ class InferenceSpeakerEmbedding(TrainSpeakerEmbedding):
         return inputs_embed
 
 
+class TrainSpeakerSimilarity(Layer):
+    def __init__(self, N, M, **kwargs):
+        self.N = N
+        self.M = M
+        super(TrainSpeakerSimilarity, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        self.w = self.add_weight(name='w',
+                                 shape=(1,),
+                                 initializer=Constant(value=10.),
+                                 constraint=NonNeg())
+        self.b = self.add_weight(name='b',
+                                 shape=(1,),
+                                 initializer=Constant(value=-5.))
+        super(TrainSpeakerSimilarity, self).build(input_shape)
+
+    def call(self, inputs, **kwargs):
+        embedded_split = K.reshape(inputs, shape=(self.N, self.M, -1))
+
+        center = K.l2_normalize(K.mean(embedded_split, axis=1), axis=-1)
+        center_except = K.l2_normalize(
+            K.reshape(K.sum(embedded_split, axis=1, keepdims=True) - embedded_split, shape=(self.N * self.M, -1)),
+            axis=-1)
+
+        similarity = K.concatenate(
+            [K.concatenate([K.sum(center_except[i * self.M:(i + 1) * self.M, :] * embedded_split[j, :, :], axis=1,
+                                  keepdims=True) if i == j else K.sum(center[i:(i + 1), :] * embedded_split[j, :, :],
+                                                                      axis=1, keepdims=True) for
+                            i in range(self.N)], axis=1) for j in range(self.N)], axis=0)
+
+        similarity = self.w * similarity + self.b
+
+        return similarity
+
+    def get_config(self):
+        config = super(TrainSpeakerSimilarity, self).get_config()
+        config.update({
+            'N': self.N,
+            'M': self.M
+        })
+        return config
+
+
+class TestSpeakerEmbedding(TrainSpeakerEmbedding):
+    def call(self, inputs, **kwargs):
+        pair1, pair2 = inputs
+
+        pair1_shape, pair2_shape = K.shape(pair1), K.shape(pair2)
+
+        pair1_mask = K.cast(K.squeeze(K.any(K.not_equal(pair1, 0.), axis=(-2, -1), keepdims=True), axis=-1),
+                            dtype=pair1.dtype)
+        pair2_mask = K.cast(K.squeeze(K.any(K.not_equal(pair2, 0.), axis=(-2, -1), keepdims=True), axis=-1),
+                            dtype=pair2.dtype)
+
+        pair1_to_lstm = K.reshape(pair1, (-1, pair1.shape[-2], pair1.shape[-1]))
+        pair2_to_lstm = K.reshape(pair2, (-1, pair2.shape[-2], pair2.shape[-1]))
+
+        batch = K.concatenate([pair1_to_lstm, pair2_to_lstm], axis=0)
+
+        embedded = super(TestSpeakerEmbedding, self).call(batch)
+
+        pair1_embed = embedded[:K.shape(pair1_to_lstm)[0]]
+        pair2_embed = embedded[K.shape(pair1_to_lstm)[0]:]
+
+        pair1_embed = K.reshape(pair1_embed, (pair1_shape[0], pair1_shape[1], -1))
+        pair2_embed = K.reshape(pair2_embed, (pair2_shape[0], pair2_shape[1], -1))
+
+        pair1_embed = pair1_embed * pair1_mask
+        pair2_embed = pair2_embed * pair2_mask
+
+        pair1_n = K.sum(pair1_mask, axis=1)
+        pair2_n = K.sum(pair2_mask, axis=1)
+
+        pair1_embed = K.sum(pair1_embed, axis=1) / pair1_n
+        pair2_embed = K.sum(pair2_embed, axis=1) / pair2_n
+
+        return pair1_embed, pair2_embed
+
+
+class TestSpeakerSimilarity(TrainSpeakerSimilarity):
+    def __init__(self, **kwargs):
+        super(TrainSpeakerSimilarity, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        super(TrainSpeakerSimilarity, self).build(input_shape)
+
+    def call(self, inputs, **kwargs):
+        pair1_embed, pair2_embed = inputs
+
+        pair1_embed = K.l2_normalize(pair1_embed, axis=-1)
+        pair2_embed = K.l2_normalize(pair2_embed, axis=-1)
+
+        sim = K.dot(pair1_embed, K.transpose(pair2_embed))
+
+        sim = tf.linalg.tensor_diag_part(sim)
+
+        return sim
+
+
 custom_layers = {
     BahdanauAttention.__name__: BahdanauAttention,
     Decoder.__name__: Decoder,
@@ -476,5 +577,8 @@ custom_layers = {
     Encoder.__name__: Encoder,
     PostProcessing.__name__: PostProcessing,
     TrainSpeakerEmbedding.__name__: TrainSpeakerEmbedding,
-    InferenceSpeakerEmbedding.__name__: InferenceSpeakerEmbedding
+    InferenceSpeakerEmbedding.__name__: InferenceSpeakerEmbedding,
+    TrainSpeakerSimilarity.__name__: TrainSpeakerSimilarity,
+    TestSpeakerEmbedding.__name__: TestSpeakerEmbedding,
+    TestSpeakerSimilarity.__name__: TestSpeakerSimilarity
 }

@@ -212,3 +212,23 @@ class SynthesizerTrainGenerator(Sequence):
         mel_spec = pad_sequences(mel_spec, maxlen=max_frames, dtype='float32', padding='post')
 
         return [text_int, embeddings, mel_spec], [mel_spec, mag_spec]
+
+
+class SVTestPredictionGenerator(Sequence):
+    def __init__(self, batch_size, pair_text, numpied_embed_dir):
+        self.batch_size = batch_size
+        self.pairs = pd.read_csv(pair_text)
+        self.pairs[1] = os.path.abspath(numpied_embed_dir) + '/' + self.pairs[1]
+        self.pairs[2] = os.path.abspath(numpied_embed_dir) + '/' + self.pairs[2]
+
+    def __len__(self):
+        return len(self.pairs) // self.batch_size
+
+    def get_target(self):
+        return self.pairs[0][:len(self)]
+
+    def __getitem__(self, index):
+        current_test_batch = self.pairs[index*self.batch_size: (index+1)*self.batch_size]
+        pair1_embed = np.stack([np.load(embed) for embed in current_test_batch[1]], axis=0)
+        pair2_embed = np.stack([np.load(embed) for embed in current_test_batch[2]], axis=0)
+        return pair1_embed, pair2_embed

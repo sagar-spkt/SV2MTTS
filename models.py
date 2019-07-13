@@ -2,7 +2,8 @@ from tensorflow.python.keras.models import Model, load_model
 from tensorflow.python.keras.layers import Input
 from tensorflow.python.keras.optimizers import Adam
 
-from layers import Encoder, Decoder, PostProcessing, Conditioning, InferenceSpeakerEmbedding, custom_layers
+from layers import Encoder, Decoder, PostProcessing, Conditioning, InferenceSpeakerEmbedding, custom_layers, \
+    TestSpeakerEmbedding, TestSpeakerSimilarity
 import hparams
 
 
@@ -145,6 +146,30 @@ def get_synthesizer_model(vocab_size=len(hparams.VOCAB),
     synthesizer_model.compile(optimizer=optimizer, loss=['mae', 'mae', None], loss_weights=[1., 1., None])
 
     return synthesizer_model
+
+
+def get_SV_test_model(embedded_input=True,
+                      pretrained_model=None,
+                      n_mels=hparams.SPK_EMBED_N_MELS,
+                      lstm_units=hparams.SPK_EMBED_LSTM_UNITS,
+                      proj_size=hparams.SPK_EMBED_SIZE,
+                      num_layers=hparams.SPK_EMBED_NUM_LAYERS,
+                      sliding_window_size=hparams.SLIDING_WINDOW_SIZE):
+    pair1 = Input(shape=(proj_size,) if embedded_input else (None, sliding_window_size, n_mels))
+    pair2 = Input(shape=(proj_size,) if embedded_input else (None, sliding_window_size, n_mels))
+    if not embedded_input:
+        pair1_embed, pair2_embed = TestSpeakerEmbedding(lstm_units, proj_size,
+                                                        num_layers, name='embeddings')([pair1, pair2])
+    else:
+        pair1_embed, pair2_embed = pair1, pair2
+    sim = TestSpeakerSimilarity(name='similarity')([pair1_embed, pair2_embed])
+
+    model = Model([pair1, pair2], sim)
+
+    if not embedded_input:
+        model.load_weights(pretrained_model, by_name=True)
+
+    return model
 
 
 def load_saved_model(model_path):
