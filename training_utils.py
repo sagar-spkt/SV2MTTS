@@ -1,7 +1,17 @@
+import glob
+import os
+import re
 import numpy as np
 from tensorflow.python.keras.callbacks import LearningRateScheduler
 
 import hparams
+
+
+def get_init_epoch(check_point_path):
+    check_point_list = glob.glob(os.path.join(check_point_path, 'model*.hdf5'))
+    base_names = [os.path.basename(check_point) for check_point in check_point_list]
+    epochs = [int(re.search(r'\d+', string).group()) for string in base_names]
+    return np.max(epochs) if epochs else 0
 
 
 def lr_schedule_func(global_step):
