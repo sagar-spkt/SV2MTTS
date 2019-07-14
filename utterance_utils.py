@@ -78,14 +78,14 @@ def griffin_lim(mag_spectro,
 
 
 def mag_spectro2wav(mag_spectro,
-                    preemphasize,
-                    ref_db,
-                    max_db,
-                    n_iter_griffin_lim,
-                    n_fft,
-                    hop_length,
-                    win_length,
-                    window):
+                    preemphasize=hparams.PREEMPHASIZE,
+                    ref_db=hparams.REF_DB,
+                    max_db=hparams.MAX_DB,
+                    n_iter_griffin_lim=hparams.N_ITER_GRIFFIN_LIM,
+                    n_fft=hparams.N_FFT,
+                    hop_length=hparams.HOP_LENGTH,
+                    win_length=hparams.WIN_LENGTH,
+                    window=hparams.WINDOW):
     mag_spectro = mag_spectro.T
     mag_spectro = (np.clip(mag_spectro, 0, 1) * max_db) - max_db + ref_db
     mag_spectro = np.power(10.0, mag_spectro / 20)
