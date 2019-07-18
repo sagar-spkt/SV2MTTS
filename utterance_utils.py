@@ -118,7 +118,7 @@ def trim_long_silences(wav):
 
     # Perform voice activation detection
     voice_flags = []
-    vad = webrtcvad.Vad(mode=3)
+    vad = webrtcvad.Vad(mode=hparams.VAD_LEVEL)
     for window_start in range(0, len(wav), samples_per_window):
         window_end = window_start + samples_per_window
         voice_flags.append(vad.is_speech(pcm_wave[window_start * 2:window_end * 2],
@@ -153,19 +153,25 @@ def mel_for_speaker_embeddings(wav_path,
                                ref_db,
                                max_db):
     wav = AudioSegment.from_wav(wav_path)
-    wav = wav.set_frame_rate(hparams.SAMPLE_RATE)
+    wav = wav.set_frame_rate(sample_rate)
     utt_array = librosa.util.buf_to_float(np.frombuffer(wav.raw_data, dtype=np.int16))
     utt_array = trim_long_silences(utt_array)
-    if hparams.MIN_UTT_LEN >= (utt_array.shape[0] // sample_rate) or hparams.MAX_UTT_LEN <= (
-            utt_array.shape[0] // sample_rate):
-        return wav_path
+    try:
+        utt_array, _ = librosa.effects.trim(utt_array, top_db=hparams.TRIM_SILENCE_TOP_DB)
+    except ValueError:
+        print(wav_path)
+    if hparams.MIN_UTT_LEN >= (utt_array.shape[0] / sample_rate):
+        repeat = (hparams.MIN_UTT_LEN * sample_rate) // utt_array.shape[0] + 1
+        repeated = np.tile(utt_array, int(repeat))
+    else:
+        repeated = utt_array
     npy_path = wav_path.replace(dataset_dir, out_dir)
     try:
         os.makedirs('/'.join(npy_path.split('/')[:-1]))
     except FileExistsError:
         pass
     np.save(npy_path.replace('.wav', '.npy'), utt_array)
-    stft = librosa.stft(utt_array, n_fft=n_fft, hop_length=hop_length, win_length=win_length)
+    stft = librosa.stft(repeated, n_fft=n_fft, hop_length=hop_length, win_length=win_length)
     mag_spec = np.abs(stft)
     mel_basis = librosa.filters.mel(sample_rate, n_fft=n_fft, n_mels=n_mels)
     mel_spec = np.dot(mel_basis, mag_spec)
