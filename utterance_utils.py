@@ -159,7 +159,7 @@ def mel_for_speaker_embeddings(wav_path,
     try:
         utt_array, _ = librosa.effects.trim(utt_array, top_db=hparams.TRIM_SILENCE_TOP_DB)
     except ValueError:
-        print(wav_path)
+        return wav_path
     if hparams.MIN_UTT_LEN >= (utt_array.shape[0] / sample_rate):
         repeat = (hparams.MIN_UTT_LEN * sample_rate) // utt_array.shape[0] + 1
         repeated = np.tile(utt_array, int(repeat))

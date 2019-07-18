@@ -46,6 +46,7 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
         self.n_mels = n_mels
         self.ref_db = ref_db
         self.max_db = max_db
+        self.failed_utterances = []
         self.sample_lengths = []
         self.dataset_dir = dataset_dir
         self.out_dir = out_dir
@@ -79,9 +80,14 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
         return len(self.all_utterances) // self.batch_size + 1
 
     def get_all_utterances(self):
-        return self.all_utterances
+        return list(filter(lambda x: x not in self.failed_utterances, self.all_utterances))
 
     def on_epoch_end(self):
+        failed_utterances = pd.Series(self.failed_utterances).str.replace(os.path.abspath(self.dataset_dir) + '/', '')
+        failed_utterances = failed_utterances.str.replace('.wav', '')
+        failed_utterances = np.array(list(failed_utterances.str.split('/')))[:, -1]
+
+        self.df = self.df[~self.df[0].isin(failed_utterances)]
         self.df['sample_lengths'] = self.sample_lengths
         self.df.to_csv(os.path.join(self.out_dir, 'trans.tsv'), header=None, index=None, sep='\t')
 
@@ -92,7 +98,10 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
                                        n_fft=self.n_fft, hop_length=self.hop_length,
                                        win_length=self.win_length, n_mels=self.n_mels, ref_db=self.ref_db,
                                        max_db=self.max_db) for utt in current_batch]
-        mel_specs = [(z[0], z[1]) for z in mel_specs]
+        self.failed_utterances.extend([x for x in mel_specs if isinstance(x, str)])
+        mel_specs = [(z[0], z[1]) for z in mel_specs if isinstance(z, (tuple, list)) and not isinstance(z, str)]
+        if not mel_specs:
+            return None
         mel_specs, sample_lengths = zip(*mel_specs)
         self.sample_lengths.extend(sample_lengths)
         mel_slided = [np.stack(
