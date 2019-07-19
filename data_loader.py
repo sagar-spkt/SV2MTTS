@@ -30,9 +30,10 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
                  batch_size=hparams.BATCH_SIZE,
                  sliding_window_size=hparams.SLIDING_WINDOW_SIZE,
                  sample_rate=hparams.SAMPLE_RATE,
+                 embed_sample_rate=hparams.EMBED_SAMPLE_RATE,
                  n_fft=hparams.N_FFT,
-                 hop_length=hparams.HOP_LENGTH,
-                 win_length=hparams.WIN_LENGTH,
+                 hop_length=hparams.EMBED_HOP_LENGTH,
+                 win_length=hparams.EMBED_WIN_LENGTH,
                  n_mels=hparams.SPK_EMBED_N_MELS,
                  ref_db=hparams.REF_DB,
                  max_db=hparams.MAX_DB
@@ -40,6 +41,7 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
         self.batch_size = batch_size
         self.sliding_window_size = sliding_window_size
         self.sample_rate = sample_rate
+        self.embed_sample_rate = embed_sample_rate
         self.n_fft = n_fft
         self.hop_length = hop_length
         self.win_length = win_length
@@ -96,6 +98,7 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
         current_batch = self.all_utterances[index * self.batch_size: (index + 1) * self.batch_size]
         mel_specs = [
             mel_for_speaker_embeddings(utt, self.dataset_dir, self.out_dir, sample_rate=self.sample_rate,
+                                       embed_sample_rate=self.embed_sample_rate,
                                        n_fft=self.n_fft, hop_length=self.hop_length,
                                        win_length=self.win_length, n_mels=self.n_mels, ref_db=self.ref_db,
                                        max_db=self.max_db) for utt in current_batch]

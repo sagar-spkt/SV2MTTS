@@ -146,6 +146,7 @@ def mel_for_speaker_embeddings(wav_path,
                                dataset_dir,
                                out_dir,
                                sample_rate,
+                               embed_sample_rate,
                                n_fft,
                                hop_length,
                                win_length,
@@ -160,23 +161,32 @@ def mel_for_speaker_embeddings(wav_path,
         utt_array, _ = librosa.effects.trim(utt_array, top_db=hparams.TRIM_SILENCE_TOP_DB)
     except ValueError:
         return wav_path
-    if hparams.MIN_UTT_LEN >= (utt_array.shape[0] / sample_rate):
-        repeat = (hparams.MIN_UTT_LEN * sample_rate) // utt_array.shape[0] + 1
-        repeated = np.tile(utt_array, int(repeat))
-    else:
-        repeated = utt_array
+
     npy_path = wav_path.replace(dataset_dir, out_dir)
     try:
         os.makedirs('/'.join(npy_path.split('/')[:-1]))
     except FileExistsError:
         pass
     np.save(npy_path.replace('.wav', '.npy'), utt_array)
+    utt_length = utt_array.shape[0]
+
+    pcm_wave = struct.pack("%dh" % len(utt_array), *(np.round(utt_array * hparams.int16_max)).astype(np.int16))
+    wav = AudioSegment(pcm_wave, sample_width=wav.sample_width, frame_rate=wav.frame_rate, channels=wav.channels)
+    wav = wav.set_frame_rate(embed_sample_rate)
+    utt_array = librosa.util.buf_to_float(np.frombuffer(wav.raw_data, dtype=np.int16))
+
+    if hparams.MIN_UTT_LEN >= (utt_array.shape[0] / embed_sample_rate):
+        repeat = (hparams.MIN_UTT_LEN * embed_sample_rate) // utt_array.shape[0] + 1
+        repeated = np.tile(utt_array, int(repeat))
+    else:
+        repeated = utt_array
+
     stft = librosa.stft(repeated, n_fft=n_fft, hop_length=hop_length, win_length=win_length)
     mag_spec = np.abs(stft)
-    mel_basis = librosa.filters.mel(sample_rate, n_fft=n_fft, n_mels=n_mels)
+    mel_basis = librosa.filters.mel(embed_sample_rate, n_fft=n_fft, n_mels=n_mels)
     mel_spec = np.dot(mel_basis, mag_spec)
 
     mel_db = librosa.amplitude_to_db(mel_spec)
     mel_db = np.clip((mel_db - ref_db + max_db) / max_db, 1e-8, 1)
 
-    return mel_db.astype(np.float32).T, utt_array.shape[0]
+    return mel_db.astype(np.float32).T, utt_length
