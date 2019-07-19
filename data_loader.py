@@ -74,7 +74,8 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
             df['len'] = df[1].astype(str).str.len()
             self.df = df.sort_values('len').reset_index(drop=True)
             ids = np.array(list(self.df[0].str.split('_')))
-            self.all_utterances = os.path.abspath(dataset_dir + '/wav48') + '/' + pd.Series(ids[:, 0]) + '/' + self.df[0] + '.wav'
+            self.all_utterances = os.path.abspath(dataset_dir + '/wav48') + '/' + pd.Series(ids[:, 0]) + '/' + self.df[
+                0] + '.wav'
 
     def __len__(self):
         return len(self.all_utterances) // self.batch_size + 1
@@ -148,12 +149,11 @@ class SynthesizerTrainGenerator(Sequence):
         # self.embed_target = embed_target
 
         df = pd.read_csv(os.path.join(numpied_dir, 'trans.tsv'), header=None, sep='\t',
-                         names=['utt', 'original', 'normalized', 'text_length', 'sample_length'])
-        df['len'] = df['normalized'].str.len()
+                         names=['utt', 'normalized', 'text_length', 'sample_length'])
         df['bin'] = pd.cut(df['sample_length'], bins=num_buckets, labels=[i for i in range(num_buckets)])
         ids = np.array(list(df['utt'].str.split('_')))
         df['utt'] = os.path.abspath(numpied_dir) + '/' + pd.Series(ids[:, 0]) + '/' + \
-                    pd.Series(ids[:, 1]) + '/' + df['utt'] + '.npy'
+                    df['utt'] + '.npy'
         df['embed'] = df['utt'].str.replace('.npy', '_embed.npy')
         df['normalized'] = df['normalized'] + self.vocab[1]  # EOS
 
@@ -225,10 +225,10 @@ class SVTestPredictionGenerator(Sequence):
         return len(self.pairs) // self.batch_size
 
     def get_target(self):
-        return self.pairs[0][:len(self)*self.batch_size]
+        return self.pairs[0][:len(self) * self.batch_size]
 
     def __getitem__(self, index):
-        current_test_batch = self.pairs[index*self.batch_size: (index+1)*self.batch_size]
+        current_test_batch = self.pairs[index * self.batch_size: (index + 1) * self.batch_size]
         pair1_embed = np.stack([np.load(embed) for embed in current_test_batch[1]], axis=0)
         pair2_embed = np.stack([np.load(embed) for embed in current_test_batch[2]], axis=0)
         return [pair1_embed, pair2_embed]
