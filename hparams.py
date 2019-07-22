@@ -47,7 +47,7 @@ WARMUP_STEPS = 4000.0
 CLIPNORM = 5.0
 
 VAD_LEVEL = 2
-TRIM_SILENCE_TOP_DB = 30
+TRIM_SILENCE_TOP_DB = 23
 vad_window_length = 30  # In milliseconds
 vad_moving_average_width = 8
 vad_max_silence_length = 6
