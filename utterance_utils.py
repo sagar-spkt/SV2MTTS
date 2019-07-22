@@ -82,13 +82,15 @@ def mag_spectro2wav(mag_spectro,
                     ref_db=hparams.REF_DB,
                     max_db=hparams.MAX_DB,
                     n_iter_griffin_lim=hparams.N_ITER_GRIFFIN_LIM,
+                    gl_power=hparams.GL_POWER,
                     n_fft=hparams.N_FFT,
                     hop_length=hparams.HOP_LENGTH,
                     win_length=hparams.WIN_LENGTH,
                     window=hparams.WINDOW):
     mag_spectro = mag_spectro.T
     mag_spectro = (np.clip(mag_spectro, 0, 1) * max_db) - max_db + ref_db
-    mag_spectro = np.power(10.0, mag_spectro / 20)
+    mag_spectro = librosa.db_to_amplitude(mag_spectro)
+    mag_spectro = mag_spectro ** gl_power
     wav = griffin_lim(mag_spectro,
                       n_iter_griffin_lim=n_iter_griffin_lim,
                       n_fft=n_fft,
