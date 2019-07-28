@@ -68,7 +68,7 @@ def get_full_model(vocab_size=len(hparams.VOCAB),
     postnet_out = post_processing(decoder_pred)
 
     full_model = Model(inputs=[char_inputs, spk_inputs, decoder_inputs],
-                       outputs=[decoder_pred, postnet_out, alignments])
+                       outputs=[decoder_pred, postnet_out, alignments, spk_embed])
     return full_model
 
 
