@@ -102,6 +102,35 @@ def mag_spectro2wav(mag_spectro,
     return wav.astype(np.float32)
 
 
+def mel_spectro2wav(mel_spectro, preemphasize=hparams.PREEMPHASIZE,
+                    ref_db=hparams.REF_DB,
+                    max_db=hparams.MAX_DB,
+                    n_iter_griffin_lim=hparams.N_ITER_GRIFFIN_LIM,
+                    gl_power=hparams.GL_POWER,
+                    sample_rate=hparams.SAMPLE_RATE,
+                    n_fft=hparams.N_FFT,
+                    n_mels=hparams.SYNTHESIZER_N_MELS,
+                    hop_length=hparams.HOP_LENGTH,
+                    win_length=hparams.WIN_LENGTH,
+                    window=hparams.WINDOW):
+    mel_spectro = mel_spectro.T
+    mel_spectro = (np.clip(mel_spectro, 0, 1) * max_db) - max_db + ref_db
+    amp_mel = librosa.db_to_amplitude(mel_spectro)
+    inv_mel_basis = np.linalg.pinv(librosa.filters.mel(sample_rate, n_fft=n_fft, n_mels=n_mels))
+    mag_spectro = np.maximum(1e-10, np.dot(inv_mel_basis, amp_mel))
+    mag_spectro = mag_spectro ** gl_power
+    wav = griffin_lim(mag_spectro,
+                      n_iter_griffin_lim=n_iter_griffin_lim,
+                      n_fft=n_fft,
+                      hop_length=hop_length,
+                      win_length=win_length,
+                      window=window)
+    wav = signal.lfilter([1], [1, -preemphasize], wav)
+    wav, _ = librosa.effects.trim(wav)
+    return wav.astype(np.float32)
+
+
+
 def trim_long_silences(wav):
     """
     Ensures that segments without voice in the waveform remain no longer than a
