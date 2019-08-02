@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from data_loader import SpeakerEmbeddingPredictionGenerator
+from data_loader import SpeakerEmbeddingPredictionGenerator, PredictedSpeakerEmbeddingPredictionGenerator
 from models import get_speaker_embedding_model
 import hparams
 
@@ -99,3 +99,54 @@ def wav_to_speaker_embeddings(dataset_dir, out_dir,
     for utterance, embedding in iterator:
         utterance = utterance.replace(dataset_dir, out_dir)
         np.save(utterance.replace('.wav', '_embed.npy'), embedding)
+
+def numpy_to_speaker_embeddings(dataset_dir,
+                              dataset_name,
+                              testvalid,
+                              spk_embed_model_path,
+                              batch_size=hparams.BATCH_SIZE,
+                              sample_rate=hparams.SAMPLE_RATE,
+                              embed_sample_rate=hparams.EMBED_SAMPLE_RATE,
+                              n_fft=hparams.N_FFT,
+                              hop_length=hparams.EMBED_HOP_LENGTH,
+                              win_length=hparams.EMBED_WIN_LENGTH,
+                              n_mels=hparams.SPK_EMBED_N_MELS,
+                              ref_db=hparams.REF_DB,
+                              max_db=hparams.MAX_DB,
+                              sliding_window_size=hparams.SLIDING_WINDOW_SIZE,
+                              spk_embed_lstm_units=hparams.SPK_EMBED_LSTM_UNITS,
+                              spk_embed_size=hparams.SPK_EMBED_SIZE,
+                              spk_embed_num_layers=hparams.SPK_EMBED_NUM_LAYERS,
+                              verbose=1):
+    speaker_embedding_model = get_speaker_embedding_model(sliding_window_size=sliding_window_size,
+                                                          embed_mels=n_mels,
+                                                          spk_embed_lstm_units=spk_embed_lstm_units,
+                                                          spk_embed_size=spk_embed_size,
+                                                          spk_embed_num_layers=spk_embed_num_layers)
+    speaker_generator = PredictedSpeakerEmbeddingPredictionGenerator(dataset_dir,
+                                                            dataset_name,
+                                                            testvalid,
+                                                            batch_size=batch_size,
+                                                            sliding_window_size=sliding_window_size,
+                                                            sample_rate=sample_rate,
+                                                            embed_sample_rate=embed_sample_rate,
+                                                            n_fft=n_fft,
+                                                            hop_length=hop_length,
+                                                            win_length=win_length,
+                                                            n_mels=n_mels,
+                                                            ref_db=ref_db,
+                                                            max_db=max_db)
+    speaker_embedding_model.load_weights(spk_embed_model_path, by_name=True)
+    speaker_embeddings = []
+    for batch in tqdm(speaker_generator):
+        if batch is None:
+            continue
+        batch_embed_prediction = speaker_embedding_model.predict_on_batch(batch)
+        speaker_embeddings.append(batch_embed_prediction)
+    speaker_embeddings = np.concatenate(speaker_embeddings, axis=0)
+
+    iterator = tqdm(zip(speaker_generator.get_all_utterances(), speaker_embeddings)) if verbose else zip(
+        speaker_generator.get_all_utterances(), speaker_embeddings)
+
+    for utterance, embedding in iterator:
+        np.save(utterance.replace('_predicted.npy', '_predicted_embed.npy'), embedding)

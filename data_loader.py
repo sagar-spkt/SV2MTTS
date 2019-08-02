@@ -6,7 +6,7 @@ import pandas as pd
 from tensorflow.python.keras.utils import Sequence
 from tensorflow.python.keras.preprocessing.sequence import pad_sequences
 
-from utterance_utils import mel_for_speaker_embeddings, text_to_nparray, get_spectrograms
+from utterance_utils import mel_for_speaker_embeddings, mel_for_speaker_embeddings_from_npy, text_to_nparray, get_spectrograms
 import hparams
 
 
@@ -108,6 +108,71 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
             return None
         mel_specs, sample_lengths = zip(*mel_specs)
         self.sample_lengths.extend(sample_lengths)
+        mel_slided = [np.stack(
+            [utt[i: i + self.sliding_window_size] if (i + self.sliding_window_size) <= utt.shape[0] else
+             utt[-self.sliding_window_size:] for i in range(0, utt.shape[0], int(self.sliding_window_size // 2))])
+            for utt in mel_specs]
+        # padding
+        max_len = np.max([utt.shape[0] for utt in mel_slided])
+        padded_mel_slides = np.stack(
+            [np.pad(utt, ([0, max_len - utt.shape[0]], [0, 0], [0, 0]), mode='constant') for utt in mel_slided], axis=0)
+        return padded_mel_slides
+
+class PredictedSpeakerEmbeddingPredictionGenerator(Sequence):
+    def __init__(self, dataset_dir, dataset_name,
+                 testvalid,
+                 batch_size=hparams.BATCH_SIZE,
+                 sliding_window_size=hparams.SLIDING_WINDOW_SIZE,
+                 sample_rate=hparams.SAMPLE_RATE,
+                 embed_sample_rate=hparams.EMBED_SAMPLE_RATE,
+                 n_fft=hparams.N_FFT,
+                 hop_length=hparams.EMBED_HOP_LENGTH,
+                 win_length=hparams.EMBED_WIN_LENGTH,
+                 n_mels=hparams.SPK_EMBED_N_MELS,
+                 ref_db=hparams.REF_DB,
+                 max_db=hparams.MAX_DB
+                 ):
+        self.batch_size = batch_size
+        self.sliding_window_size = sliding_window_size
+        self.sample_rate = sample_rate
+        self.embed_sample_rate = embed_sample_rate
+        self.n_fft = n_fft
+        self.hop_length = hop_length
+        self.win_length = win_length
+        self.n_mels = n_mels
+        self.ref_db = ref_db
+        self.max_db = max_db
+        self.failed_utterances = []
+        self.sample_lengths = []
+        self.dataset_dir = dataset_dir
+        self.dataset_name = dataset_name
+
+        if self.dataset_name == 'VCTK':
+            df = pd.read_csv(os.path.join(dataset_dir + '/' + testvalid, 'trans.tsv'), header=None, sep='\t')
+            df['len'] = df[1].astype(str).str.len()
+            self.df = df.sort_values('len').reset_index(drop=True)
+            ids = np.array(list(self.df[0].str.split('_')))
+            self.all_utterances = os.path.abspath(dataset_dir + '/' + testvalid) + '/' + pd.Series(ids[:, 0]) + '/' + self.df[
+            0] + '_predicted.npy'
+
+    def __len__(self):
+        return len(self.all_utterances) // self.batch_size + 1
+
+    def get_all_utterances(self):
+        return list(filter(lambda x: x not in self.failed_utterances, self.all_utterances))
+
+    def __getitem__(self, index):
+        current_batch = self.all_utterances[index * self.batch_size: (index + 1) * self.batch_size]
+        mel_specs = [
+            mel_for_speaker_embeddings_from_npy(utt, self.dataset_dir, sample_rate=self.sample_rate,
+                                       embed_sample_rate=self.embed_sample_rate,
+                                       n_fft=self.n_fft, hop_length=self.hop_length,
+                                       win_length=self.win_length, n_mels=self.n_mels, ref_db=self.ref_db,
+                                       max_db=self.max_db) for utt in current_batch]
+        self.failed_utterances.extend([x for x in mel_specs if isinstance(x, str)])
+        mel_specs = [z for z in mel_specs if isinstance(z, np.ndarray) and not isinstance(z, str)]
+        if not mel_specs:
+            return None
         mel_slided = [np.stack(
             [utt[i: i + self.sliding_window_size] if (i + self.sliding_window_size) <= utt.shape[0] else
              utt[-self.sliding_window_size:] for i in range(0, utt.shape[0], int(self.sliding_window_size // 2))])
