@@ -175,6 +175,7 @@ def trim_long_silences(wav):
 
 def mel_for_speaker_embeddings(wav_path,
                                dataset_dir,
+                               dataset_name,
                                out_dir,
                                sample_rate,
                                embed_sample_rate,
@@ -184,8 +185,11 @@ def mel_for_speaker_embeddings(wav_path,
                                n_mels,
                                ref_db,
                                max_db):
-    wav = AudioSegment.from_wav(wav_path)
-    wav = wav.set_frame_rate(sample_rate)
+    if (dataset_name == 'NepaliASR'):
+        wav = AudioSegment.from_file(wav_path, 'flac')
+    else:
+        wav = AudioSegment.from_wav(wav_path)
+        wav = wav.set_frame_rate(sample_rate)
     utt_array = librosa.util.buf_to_float(np.frombuffer(wav.raw_data, dtype=np.int16))
     utt_array = trim_long_silences(utt_array)
     try:
@@ -198,7 +202,10 @@ def mel_for_speaker_embeddings(wav_path,
         os.makedirs('/'.join(npy_path.split('/')[:-1]))
     except FileExistsError:
         pass
-    np.save(npy_path.replace('.wav', '.npy'), utt_array)
+    if (dataset_name == 'NepaliASR'):
+        np.save(npy_path.replace('.flac', '.npy'), utt_array)
+    else:
+        np.save(npy_path.replace('.wav', '.npy'), utt_array)
     utt_length = utt_array.shape[0]
 
     pcm_wave = struct.pack("%dh" % len(utt_array), *(np.round(utt_array * hparams.int16_max)).astype(np.int16))

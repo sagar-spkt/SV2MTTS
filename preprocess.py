@@ -98,7 +98,11 @@ def wav_to_speaker_embeddings(dataset_dir, out_dir,
 
     for utterance, embedding in iterator:
         utterance = utterance.replace(dataset_dir, out_dir)
-        np.save(utterance.replace('.wav', '_embed.npy'), embedding)
+        if (dataset_name == 'NepaliASR'):
+            np.save(utterance.replace('.flac', '_embed.npy'), embedding)
+        else:
+            np.save(utterance.replace('.wav', '_embed.npy'), embedding)
+
 
 def numpy_to_speaker_embeddings(dataset_dir,
                               dataset_name,

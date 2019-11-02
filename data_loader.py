@@ -78,6 +78,12 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
             ids = np.array(list(self.df[0].str.split('_')))
             self.all_utterances = os.path.abspath(dataset_dir + '/wav48') + '/' + pd.Series(ids[:, 0]) + '/' + self.df[
                 0] + '.wav'
+        
+        elif self.dataset_name == 'NepaliASR':
+            df = pd.read_csv(os.path.join(dataset_dir, 'utt_spk_text.tsv'), header=None, sep='\t')
+            df['len'] = df[2].str.len()
+            self.df = df.sort_values('len').reset_index(drop=True)
+            self.all_utterances = os.path.abspath(dataset_dir + '/data') + '/' + df[1] + '/' + df[0] + '.flac'
 
     def __len__(self):
         return len(self.all_utterances) // self.batch_size + 1
@@ -87,7 +93,10 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
 
     def on_epoch_end(self):
         failed_utterances = pd.Series(self.failed_utterances).str.replace(os.path.abspath(self.dataset_dir) + '/', '')
-        failed_utterances = failed_utterances.str.replace('.wav', '')
+        if (self.dataset_name == 'NepaliASR'):
+            failed_utterances = failed_utterances.str.replace('.flac', '')
+        else:
+            failed_utterances = failed_utterances.str.replace('.wav', '')
         failed_utterances = np.array(list(failed_utterances.str.split('/')))[:, -1]
 
         self.df = self.df[~self.df[0].isin(failed_utterances)]
@@ -97,7 +106,7 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
     def __getitem__(self, index):
         current_batch = self.all_utterances[index * self.batch_size: (index + 1) * self.batch_size]
         mel_specs = [
-            mel_for_speaker_embeddings(utt, self.dataset_dir, self.out_dir, sample_rate=self.sample_rate,
+            mel_for_speaker_embeddings(utt, self.dataset_dir, self.dataset_name ,self.out_dir, sample_rate=self.sample_rate,
                                        embed_sample_rate=self.embed_sample_rate,
                                        n_fft=self.n_fft, hop_length=self.hop_length,
                                        win_length=self.win_length, n_mels=self.n_mels, ref_db=self.ref_db,
