@@ -1,13 +1,14 @@
 PADDING_CHAR = '#'
 EOS = '$'
-VOCAB = PADDING_CHAR + EOS + ' !"\',-.?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+VOCAB = PADDING_CHAR + EOS + '।जे?ॉठणढख॑शधयछटाफभृौरहओॐउीडङूचवै॰झःंलघऱ़ॊम !इबिप;तथँऐ“्कआईअगएऔुञॠसऋऊदोनष'
+DATASET_NAME = 'NepaliASR'
 
 BATCH_SIZE = 32
 NUM_BUCKETS = 15
 MIN_UTT_LEN = 2.5  # in sec
 MAX_UTT_LEN = 15  # In sec
 
-SAMPLE_RATE = 32000
+SAMPLE_RATE = 16000
 EMBED_SAMPLE_RATE = 16000
 PREEMPHASIZE = 0.97
 N_ITER_GRIFFIN_LIM = 60

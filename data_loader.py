@@ -209,7 +209,8 @@ class SynthesizerTrainGenerator(Sequence):
                  n_mels=hparams.SYNTHESIZER_N_MELS,
                  ref_db=hparams.REF_DB,
                  max_db=hparams.MAX_DB,
-                 shuffle=True):
+                 shuffle=True,
+                 dataset_name=hparams.DATASET_NAME):
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.output_per_step = output_per_step
@@ -229,8 +230,12 @@ class SynthesizerTrainGenerator(Sequence):
                          names=['utt', 'normalized', 'text_length', 'sample_length'])
         df['bin'] = pd.cut(df['sample_length'], bins=num_buckets, labels=[i for i in range(num_buckets)])
         ids = np.array(list(df['utt'].str.split('_')))
-        df['utt'] = os.path.abspath(numpied_dir) + '/' + pd.Series(ids[:, 0]) + '/' + \
-                    df['utt'] + '.npy'
+        if (dataset_name == 'NepaliASR'):
+            df['utt'] = os.path.abspath(numpied_dir) + '/' + pd.Series(ids[:, 0]) + '/' + \
+                        pd.Series(ids[:, 1]) + '.npy'
+        else:
+            df['utt'] = os.path.abspath(numpied_dir) + '/' + pd.Series(ids[:, 0]) + '/' + \
+                        df['utt'] + '.npy'
         df['embed'] = df['utt'].str.replace('.npy', '_embed.npy')
         df['normalized'] = df['normalized'] + self.vocab[1]  # EOS
 
