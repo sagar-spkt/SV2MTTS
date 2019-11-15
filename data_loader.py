@@ -30,9 +30,10 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
                  batch_size=hparams.BATCH_SIZE,
                  sliding_window_size=hparams.SLIDING_WINDOW_SIZE,
                  sample_rate=hparams.SAMPLE_RATE,
+                 embed_sample_rate=hparams.EMBED_SAMPLE_RATE,
                  n_fft=hparams.N_FFT,
-                 hop_length=hparams.HOP_LENGTH,
-                 win_length=hparams.WIN_LENGTH,
+                 hop_length=hparams.EMBED_HOP_LENGTH,
+                 win_length=hparams.EMBED_WIN_LENGTH,
                  n_mels=hparams.SPK_EMBED_N_MELS,
                  ref_db=hparams.REF_DB,
                  max_db=hparams.MAX_DB
@@ -40,6 +41,7 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
         self.batch_size = batch_size
         self.sliding_window_size = sliding_window_size
         self.sample_rate = sample_rate
+        self.embed_sample_rate = embed_sample_rate
         self.n_fft = n_fft
         self.hop_length = hop_length
         self.win_length = win_length
@@ -74,7 +76,8 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
             df['len'] = df[1].astype(str).str.len()
             self.df = df.sort_values('len').reset_index(drop=True)
             ids = np.array(list(self.df[0].str.split('_')))
-            self.all_utterances = os.path.abspath(dataset_dir + '/wav48') + '/' + pd.Series(ids[:, 0]) + '/' + self.df[0] + '.wav'
+            self.all_utterances = os.path.abspath(dataset_dir + '/wav48') + '/' + pd.Series(ids[:, 0]) + '/' + self.df[
+                0] + '.wav'
 
     def __len__(self):
         return len(self.all_utterances) // self.batch_size + 1
@@ -95,6 +98,7 @@ class SpeakerEmbeddingPredictionGenerator(Sequence):
         current_batch = self.all_utterances[index * self.batch_size: (index + 1) * self.batch_size]
         mel_specs = [
             mel_for_speaker_embeddings(utt, self.dataset_dir, self.out_dir, sample_rate=self.sample_rate,
+                                       embed_sample_rate=self.embed_sample_rate,
                                        n_fft=self.n_fft, hop_length=self.hop_length,
                                        win_length=self.win_length, n_mels=self.n_mels, ref_db=self.ref_db,
                                        max_db=self.max_db) for utt in current_batch]
@@ -148,12 +152,11 @@ class SynthesizerTrainGenerator(Sequence):
         # self.embed_target = embed_target
 
         df = pd.read_csv(os.path.join(numpied_dir, 'trans.tsv'), header=None, sep='\t',
-                         names=['utt', 'original', 'normalized', 'text_length', 'sample_length'])
-        df['len'] = df['normalized'].str.len()
+                         names=['utt', 'normalized', 'text_length', 'sample_length'])
         df['bin'] = pd.cut(df['sample_length'], bins=num_buckets, labels=[i for i in range(num_buckets)])
         ids = np.array(list(df['utt'].str.split('_')))
         df['utt'] = os.path.abspath(numpied_dir) + '/' + pd.Series(ids[:, 0]) + '/' + \
-                    pd.Series(ids[:, 1]) + '/' + df['utt'] + '.npy'
+                    df['utt'] + '.npy'
         df['embed'] = df['utt'].str.replace('.npy', '_embed.npy')
         df['normalized'] = df['normalized'] + self.vocab[1]  # EOS
 
@@ -225,10 +228,10 @@ class SVTestPredictionGenerator(Sequence):
         return len(self.pairs) // self.batch_size
 
     def get_target(self):
-        return self.pairs[0][:len(self)*self.batch_size]
+        return self.pairs[0][:len(self) * self.batch_size]
 
     def __getitem__(self, index):
-        current_test_batch = self.pairs[index*self.batch_size: (index+1)*self.batch_size]
+        current_test_batch = self.pairs[index * self.batch_size: (index + 1) * self.batch_size]
         pair1_embed = np.stack([np.load(embed) for embed in current_test_batch[1]], axis=0)
         pair2_embed = np.stack([np.load(embed) for embed in current_test_batch[2]], axis=0)
         return [pair1_embed, pair2_embed]

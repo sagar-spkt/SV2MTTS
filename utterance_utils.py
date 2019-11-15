@@ -102,6 +102,35 @@ def mag_spectro2wav(mag_spectro,
     return wav.astype(np.float32)
 
 
+def mel_spectro2wav(mel_spectro, preemphasize=hparams.PREEMPHASIZE,
+                    ref_db=hparams.REF_DB,
+                    max_db=hparams.MAX_DB,
+                    n_iter_griffin_lim=hparams.N_ITER_GRIFFIN_LIM,
+                    gl_power=hparams.GL_POWER,
+                    sample_rate=hparams.SAMPLE_RATE,
+                    n_fft=hparams.N_FFT,
+                    n_mels=hparams.SYNTHESIZER_N_MELS,
+                    hop_length=hparams.HOP_LENGTH,
+                    win_length=hparams.WIN_LENGTH,
+                    window=hparams.WINDOW):
+    mel_spectro = mel_spectro.T
+    mel_spectro = (np.clip(mel_spectro, 0, 1) * max_db) - max_db + ref_db
+    amp_mel = librosa.db_to_amplitude(mel_spectro)
+    inv_mel_basis = np.linalg.pinv(librosa.filters.mel(sample_rate, n_fft=n_fft, n_mels=n_mels))
+    mag_spectro = np.maximum(1e-10, np.dot(inv_mel_basis, amp_mel))
+    mag_spectro = mag_spectro ** gl_power
+    wav = griffin_lim(mag_spectro,
+                      n_iter_griffin_lim=n_iter_griffin_lim,
+                      n_fft=n_fft,
+                      hop_length=hop_length,
+                      win_length=win_length,
+                      window=window)
+    wav = signal.lfilter([1], [1, -preemphasize], wav)
+    wav, _ = librosa.effects.trim(wav)
+    return wav.astype(np.float32)
+
+
+
 def trim_long_silences(wav):
     """
     Ensures that segments without voice in the waveform remain no longer than a
@@ -120,7 +149,7 @@ def trim_long_silences(wav):
 
     # Perform voice activation detection
     voice_flags = []
-    vad = webrtcvad.Vad(mode=3)
+    vad = webrtcvad.Vad(mode=hparams.VAD_LEVEL)
     for window_start in range(0, len(wav), samples_per_window):
         window_end = window_start + samples_per_window
         voice_flags.append(vad.is_speech(pcm_wave[window_start * 2:window_end * 2],
@@ -148,6 +177,7 @@ def mel_for_speaker_embeddings(wav_path,
                                dataset_dir,
                                out_dir,
                                sample_rate,
+                               embed_sample_rate,
                                n_fft,
                                hop_length,
                                win_length,
@@ -155,24 +185,39 @@ def mel_for_speaker_embeddings(wav_path,
                                ref_db,
                                max_db):
     wav = AudioSegment.from_wav(wav_path)
-    wav = wav.set_frame_rate(hparams.SAMPLE_RATE)
+    wav = wav.set_frame_rate(sample_rate)
     utt_array = librosa.util.buf_to_float(np.frombuffer(wav.raw_data, dtype=np.int16))
     utt_array = trim_long_silences(utt_array)
-    if hparams.MIN_UTT_LEN >= (utt_array.shape[0] // sample_rate) or hparams.MAX_UTT_LEN <= (
-            utt_array.shape[0] // sample_rate):
+    try:
+        utt_array, _ = librosa.effects.trim(utt_array, top_db=hparams.TRIM_SILENCE_TOP_DB)
+    except ValueError:
         return wav_path
+
     npy_path = wav_path.replace(dataset_dir, out_dir)
     try:
         os.makedirs('/'.join(npy_path.split('/')[:-1]))
     except FileExistsError:
         pass
     np.save(npy_path.replace('.wav', '.npy'), utt_array)
-    stft = librosa.stft(utt_array, n_fft=n_fft, hop_length=hop_length, win_length=win_length)
+    utt_length = utt_array.shape[0]
+
+    pcm_wave = struct.pack("%dh" % len(utt_array), *(np.round(utt_array * hparams.int16_max)).astype(np.int16))
+    wav = AudioSegment(pcm_wave, sample_width=wav.sample_width, frame_rate=wav.frame_rate, channels=wav.channels)
+    wav = wav.set_frame_rate(embed_sample_rate)
+    utt_array = librosa.util.buf_to_float(np.frombuffer(wav.raw_data, dtype=np.int16))
+
+    if hparams.MIN_UTT_LEN >= (utt_array.shape[0] / embed_sample_rate):
+        repeat = (hparams.MIN_UTT_LEN * embed_sample_rate) // utt_array.shape[0] + 1
+        repeated = np.tile(utt_array, int(repeat))
+    else:
+        repeated = utt_array
+
+    stft = librosa.stft(repeated, n_fft=n_fft, hop_length=hop_length, win_length=win_length)
     mag_spec = np.abs(stft)
-    mel_basis = librosa.filters.mel(sample_rate, n_fft=n_fft, n_mels=n_mels)
+    mel_basis = librosa.filters.mel(embed_sample_rate, n_fft=n_fft, n_mels=n_mels)
     mel_spec = np.dot(mel_basis, mag_spec)
 
     mel_db = librosa.amplitude_to_db(mel_spec)
     mel_db = np.clip((mel_db - ref_db + max_db) / max_db, 1e-8, 1)
 
-    return mel_db.astype(np.float32).T, utt_array.shape[0]
+    return mel_db.astype(np.float32).T, utt_length
